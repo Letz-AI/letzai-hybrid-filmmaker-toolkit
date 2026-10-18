@@ -7,6 +7,7 @@ function startFakeAnthropic() {
     requests: [],          // { key, version, body } of every request
     answers: [],           // queue of slate readings; an entry may be { status, error } to fail instead
     validKey: 'sk-ant-test',
+    answerAsText: false,
     fail: null,            // { status, message, times } makes the next requests fail
   };
   const server = http.createServer((req, res) => {
@@ -23,10 +24,14 @@ function startFakeAnthropic() {
         state.fail.times--;
         return send(state.fail.status, { type: 'error', error: { type: 'api_error', message: state.fail.message || 'boom' } }, state.fail.status === 429 ? { 'retry-after': '0' } : {});
       }
+      // like the real API for current models: a forced tool call is refused
+      if (body.tool_choice && (body.tool_choice.type === 'tool' || body.tool_choice.type === 'any')) return send(400, { type: 'error', error: { type: 'invalid_request_error', message: `tool_choice: type "${body.tool_choice.type}" is not supported for this model.` } });
       if (!body.tools) return send(200, { id: 'msg_x', model: body.model, content: [{ type: 'text', text: 'Hi' }], usage: { input_tokens: 8, output_tokens: 1 } });
       const next = state.answers.shift() || { slate_visible: false, scene: null, shot: null, take: null, confidence: 0, evidence: '' };
       if (next.status) return send(next.status, { type: 'error', error: { type: 'x', message: next.error || 'failed' } });
-      send(200, { id: 'msg_y', model: body.model, content: [{ type: 'tool_use', id: 'tu_1', name: body.tools[0].name, input: next }], usage: { input_tokens: 5000, output_tokens: 60 } });
+      const asText = state.answerAsText; // some models may answer in prose with JSON instead of calling the tool
+      send(200, { id: 'msg_y', model: body.model, content: asText ? [{ type: 'text', text: `Here is my reading:
+${JSON.stringify(next)}` }] : [{ type: 'tool_use', id: 'tu_1', name: body.tools[0].name, input: next }], usage: { input_tokens: 5000, output_tokens: 60 } });
     });
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({

@@ -39,7 +39,7 @@ Rules:
 - Never guess. If a field is blurry, cut off, hidden by a hand or too small, return null for it and lower the confidence.
 - Do not invent numbers from the clip's content. Only read what is written.
 - If no slate with numbers is visible, set slate_visible to false and the fields to null.
-- Report through the report_slate tool.`;
+- Report your answer by calling the report_slate tool exactly once. Do not answer in prose.`;
 
 /** A readable reason for an API failure. */
 function explainApi(status, body) {
@@ -101,6 +101,20 @@ async function messages(body, { key, signal, retries = 3 } = {}) {
 /** Keep a reading only if it looks like a real slate number ("6", "12A"). Anything else counts as not read. */
 const fieldOk = (v) => (v == null ? null : /^[0-9]{1,3}[A-Za-z]?$/.test(String(v).trim()) ? String(v).trim().toUpperCase().replace(/^0+(?=\d)/, '') : null);
 
+/** The slate reading from a response: the tool call, or else a JSON object somewhere in the text. */
+function answerOf(content) {
+  const blocks = content || [];
+  const use = blocks.find((c) => c.type === 'tool_use' && c.name === TOOL.name);
+  if (use && use.input) return use.input;
+  for (const b of blocks) {
+    if (b.type !== 'text') continue;
+    const m = /\{[\s\S]*\}/.exec(b.text || '');
+    if (!m) continue;
+    try { const j = JSON.parse(m[0]); if (j && typeof j === 'object' && 'scene' in j) return j; } catch { /* not json */ }
+  }
+  return null;
+}
+
 /**
  * @param {{base64:string, t:number}[]} frames JPEG frames, in time order
  * @returns {{slateVisible:boolean, scene:string|null, shot:string|null, take:number|null, confidence:number, frame:number, evidence:string, other:string, tokens:{in:number,out:number}}}
@@ -113,10 +127,10 @@ async function readSlate(frames, { model, key, signal } = {}) {
     content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: f.base64 } });
   });
   content.push({ type: 'text', text: PROMPT(frames.length, frames.map((f) => f.t)) });
-  const res = await messages({ model: model || cfg.visionSettings().model, max_tokens: 400, tools: [TOOL], tool_choice: { type: 'tool', name: TOOL.name }, messages: [{ role: 'user', content }] }, { key, signal });
-  const use = (res.content || []).find((c) => c.type === 'tool_use' && c.name === TOOL.name);
-  if (!use) throw httpError(502, 'Claude did not answer in the expected form. Try again.');
-  const r = use.input || {};
+  // Some models refuse a forced tool_choice, so the tool is offered and the prompt asks for it; a JSON answer in text is accepted too.
+  const res = await messages({ model: model || cfg.visionSettings().model, max_tokens: 1500, tools: [TOOL], messages: [{ role: 'user', content }] }, { key, signal });
+  const r = answerOf(res.content);
+  if (!r) throw httpError(502, 'Claude did not answer in the expected form. Try again.');
   const take = Number.isInteger(r.take) && r.take >= 1 && r.take <= 999 ? r.take : (/^\d{1,3}$/.test(String(r.take)) && +r.take >= 1 ? +r.take : null);
   const scene = fieldOk(r.scene);
   const shot = fieldOk(r.shot);
@@ -139,4 +153,4 @@ async function verifyKey({ key, model } = {}) {
   return { ok: true, model: res.model || model };
 }
 
-module.exports = { MODELS, TOOL, readSlate, verifyKey, explainApi, isFatal, fieldOk };
+module.exports = { MODELS, TOOL, answerOf, readSlate, verifyKey, explainApi, isFatal, fieldOk };

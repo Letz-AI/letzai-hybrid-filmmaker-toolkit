@@ -136,7 +136,8 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   assert.equal(sent[0].key, 'sk-ant-test');
   assert.equal(sent[0].version, '2023-06-01');
   assert.equal(sent[0].body.model, 'claude-haiku-5-5');
-  assert.deepEqual(sent[0].body.tool_choice, { type: 'tool', name: 'report_slate' });
+  assert.equal(sent[0].body.tool_choice, undefined, 'a forced tool call is refused by current models');
+  assert.equal(sent[0].body.tools[0].name, 'report_slate');
   const imgs = sent[0].body.messages[0].content.filter((c) => c.type === 'image');
   assert.equal(imgs.length, 6);
   assert.equal(imgs[0].source.media_type, 'image/jpeg');
@@ -212,6 +213,13 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   assert.equal(broke.state, 'error');
   assert.match(broke.error, /no credit left/i);
   fake.state.fail = null;
+
+  // a model that answers in text with JSON instead of calling the tool still works
+  fake.state.answerAsText = true;
+  fake.state.answers.push(reading({ scene: '6', shot: '2A', take: 9 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key], force: true } })).json.job)).state, 'done');
+  assert.equal((await library()).find((c) => c.key === raws[2].key).slate.take, 9);
+  fake.state.answerAsText = false;
 
   // clearing readings
   assert.equal((await req('POST', '/api/slate/clear', { body: { keys: [raws[1].key, raws[2].key] } })).json.cleared, 2);
