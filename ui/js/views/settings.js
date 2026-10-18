@@ -1,6 +1,7 @@
 // Settings: project naming, footage folders, appearance, setup check, data.
 import { html, icon, mount, on, $, plural, debounce, fmtSize } from '../lib.js';
-import { get, post, patch } from '../api.js';
+import { get, post, put, patch } from '../api.js';
+import { CONSOLE_KEYS } from '../slate.js';
 import { S, loadInfo, clips, allClips, folders } from '../store.js';
 import { toast, toastError, confirmDialog, field } from '../ui.js';
 import { openRenameAll } from '../renameall.js';
@@ -10,6 +11,9 @@ let root;
 let doctor = null;
 let found = [];
 let proxy = null;
+let vis = null;     // Claude / Anthropic settings from the server
+let visBusy = '';
+let visMsg = null;  // { ok, text }
 
 const proj = () => S.info.project;
 const theme = () => { try { return localStorage.getItem('theme') || 'dark'; } catch { return 'dark'; } };
@@ -50,6 +54,20 @@ function draw() {
       <label class="app-switch"><input type="checkbox" id="sPrepare" ${p.playback && p.playback.prepare === false ? '' : 'checked'}><span>Prepare playback copies in the background<br><span class="faint">Camera files are 4K HEVC, which most browsers can’t play directly. The kit makes a small copy of each one, unnamed clips first, so they open instantly. Uses the graphics card when it can. ${proxy ? (proxy.left ? `${proxy.left} clips (${proxy.minutes} min of footage) still to prepare, about ${proxy.etaMinutes} min${proxy.measured ? '' : ' (a guess until the first one is done)'}.` : 'Everything is ready.') : ''}</span></span></label>
     </div>
 
+    <div class="section-label">Claude: reading slates</div>
+    <div class="surface pad form-grid">
+      ${vis ? html`
+        <div class="muted">Add your own Anthropic API key and Claude can read the slate on each clip and suggest its scene, shot and take, for unnamed clips (Ingest) and to double-check named ones (Review, Board). Nothing is renamed without your confirmation.</div>
+        <div class="app-field"><label for="sVisKey">Anthropic API key</label>
+          ${vis.key.set ? html`<div class="row" style="gap:8px"><span class="app-chip app-chip--success">${icon('checkCircle', 14)}Saved ${vis.key.source === 'environment' ? 'in the ANTHROPIC_API_KEY environment variable' : 'on this computer'}</span><span class="grow"></span>${vis.key.source === 'file' ? html`<button class="app-btn app-btn--sm" id="visRemove">${icon('trash', 14)}<span>Remove key</span></button>` : ''}<button class="app-btn app-btn--sm" id="visTest">${visBusy === 'test' ? 'Testing…' : 'Test it'}</button></div>`
+            : html`<div class="row" style="gap:8px"><input class="app-input" id="sVisKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="app-btn app-btn--primary" id="visSave" style="flex:none">${visBusy === 'save' ? 'Testing…' : 'Save and test'}</button></div>`}
+          <div class="app-hint">Create a key in the <a href="${CONSOLE_KEYS}" target="_blank" rel="noopener">Anthropic Console</a>; the account needs some credit. It is stored in a file only you can read and is only ever sent to api.anthropic.com.</div>
+          ${visMsg ? html`<div class="app-alert app-alert--${visMsg.ok ? 'success' : 'error'}" style="margin-top:8px">${icon(visMsg.ok ? 'checkCircle' : 'alert')}<div class="grow">${visMsg.text}</div></div>` : ''}
+        </div>
+        ${field('Model', html`<select class="app-input" id="sVisModel">${vis.models.map((m) => html`<option value="${m.id}" ${m.id === vis.model ? 'selected' : ''}>${m.label}: ${m.note}</option>`)}</select>`)}
+        <label class="app-switch"><input type="checkbox" id="sVisConsent" ${vis.consent ? 'checked' : ''}><span>Allow sending frames from my clips to Anthropic<br><span class="faint">Up to six pictures from the start of each clip you ask Claude to read (more only if no slate is found there). File names are not sent. You are asked before each run and see the size of it first.</span></span></label>` : html`<span class="row"><span class="spinner"></span> Loading…</span>`}
+    </div>
+
     <div class="section-label">Appearance</div>
     <div class="surface pad"><div class="app-segmented" role="radiogroup">${[['dark', 'Dark', 'moon'], ['light', 'Light', 'sun'], ['system', 'Match system', 'settings']].map(([id, l, ic]) => html`<button role="radio" aria-checked="${theme() === id}" data-theme-pick="${id}">${icon(ic, 14)}${l}</button>`)}</div></div>
 
@@ -58,6 +76,7 @@ function draw() {
       ${check(S.info.ffmpeg.ok, 'ffmpeg', S.info.ffmpeg.ok ? html`Version ${S.info.ffmpeg.version}<br><span class="faint tnum">${S.info.ffmpeg.path}</span>` : 'Not found. Install it (see the welcome page) and restart the kit.')}
       ${check(!!doctor, 'Video encoder', doctor ? (doctor.encoder === 'libx264' ? 'Processor (x264). Cutting 4K will be slow; a graphics card encoder is used automatically when one works.' : `Graphics card: ${doctor.encoder}. Fast cuts and proxies.`) : html`<span class="row"><span class="spinner"></span> Testing…</span>`)}
       ${check(S.hevc, 'HEVC playback in this window', S.hevc ? 'Camera files play directly.' : 'This browser cannot decode HEVC, so the kit makes small H.264 copies. On Windows, the “HEVC Video Extensions” add-on from the Microsoft Store lets Edge play camera files directly.')}
+      ${check(S.info.vision && S.info.vision.keySet, 'Anthropic API key (Claude)', S.info.vision && S.info.vision.keySet ? 'Saved. Claude can read slates.' : 'Optional. Lets Claude read slates; add it in the section above.')}
       ${check(S.info.key.set, 'LetzAI API key', S.info.key.set ? 'Saved on this computer.' : html`Optional. Add it in <a href="#/canvas">Canvas</a>.`)}
       <div class="row" style="margin-top:6px"><button class="app-btn app-btn--sm" id="prepProxies" title="Make review copies now instead of when you open each clip">${icon('layers', 14)}<span>Prepare review copies for ${needProxy ? plural(needProxy, 'clip') : 'all clips'}</span></button></div>
     </div>
@@ -73,7 +92,7 @@ function draw() {
     <div class="section-label">About</div>
     <div class="surface pad about">
       <div><b>${S.info.app.name}</b> <span class="faint">version ${S.info.app.version}</span></div>
-      <div class="muted" style="margin-top:6px">Open source under the MIT license. It runs on your computer; nothing leaves it except what you send to your LetzAI canvas.</div>
+      <div class="muted" style="margin-top:6px">Open source under the MIT license. It runs on your computer; nothing leaves it except what you send to your LetzAI canvas and, if you turn on Claude, the frames it reads.</div>
       <div class="row wrap" style="margin-top:12px"><a class="app-btn app-btn--sm" href="https://letz.ai/docs/api" target="_blank" rel="noopener">${icon('external', 14)}<span>LetzAI API docs</span></a><a class="app-btn app-btn--sm" href="https://www.letz.ai/brandguidelines" target="_blank" rel="noopener">${icon('external', 14)}<span>Brand guidelines</span></a></div>
     </div>
   </div>`);
@@ -91,6 +110,7 @@ export default {
     draw();
     get('/api/doctor').then((d) => { doctor = d; draw(); }).catch(() => {});
     get('/api/proxy-status').then((r) => { proxy = r; draw(); }).catch(() => {});
+    get('/api/vision').then((r) => { vis = r; draw(); }).catch(() => {});
     const look = () => get('/api/folders/discover').then((r) => { found = r.folders; draw(); }).catch(() => {});
     look();
     on(el, 'click', '[data-add-found]', async (e, b) => { b.disabled = true; await save({ folders: [...proj().folders, b.dataset.addFound] }); look(); });
@@ -103,6 +123,8 @@ export default {
       else if (t.id === 'sRich') save({ naming: { ratingInFilename: t.checked } });
       else if (t.id === 'sPrepare') save({ playback: { prepare: t.checked } });
       else if (t.id === 'sIgnore') save({ ignoreDirs: t.value.split(',') });
+      else if (t.id === 'sVisModel') put('/api/vision', { model: t.value }).then((r) => { vis = r; toast('Saved.', { timeout: 1200 }); }).catch(toastError);
+      else if (t.id === 'sVisConsent') put('/api/vision', { consent: t.checked }).then((r) => { vis = r; toast('Saved.', { timeout: 1200 }); }).catch(toastError);
     });
     on(el, 'click', '[data-theme-pick]', (e, b) => { setTheme(b.dataset.themePick); draw(); });
     on(el, 'click', '#addFolder', async () => { try { const r = await post('/api/pick-folder', { title: 'Add a footage folder', start: proj().root }); if (r.path) { await save({ folders: [...proj().folders, r.path] }); } } catch (e) { toastError(e); } });
@@ -110,6 +132,15 @@ export default {
     on(el, 'click', '#rescan', async () => { try { await post('/api/rescan'); toast('Folders rescanned.', { type: 'success' }); look(); } catch (e) { toastError(e); } });
     on(el, 'click', '#prepProxies', async () => { try { const r = await post('/api/proxies', {}); toast(r.queued ? `Preparing ${plural(r.queued, 'review copy', 'review copies')}. Follow it in the queue.` : 'Nothing needs a review copy.', { type: 'success' }); } catch (e) { toastError(e); } });
     on(el, 'click', '#importLog', async () => { try { const r = await post('/api/import-log', {}); toast(`Imported ${plural(r.applied, 'take')} from ${plural(r.rows, 'log row')}.`, { type: 'success' }); } catch (e) { toastError(e); } });
+    const visTest = async (body, busy) => {
+      visBusy = busy; visMsg = null; draw();
+      try { const r = await post('/api/vision/test', { ...body, model: vis.model }); vis = r; visMsg = { ok: true, text: 'The key works.' }; await loadInfo(); } catch (e) { visMsg = { ok: false, text: e.message }; }
+      visBusy = ''; draw();
+    };
+    on(el, 'click', '#visSave', () => { const k = el.querySelector('#sVisKey').value.trim(); if (k) visTest({ key: k, save: true }, 'save'); });
+    on(el, 'click', '#visTest', () => visTest({}, 'test'));
+    on(el, 'click', '#visRemove', async () => { try { vis = await put('/api/vision', { key: '' }); visMsg = null; await loadInfo(); draw(); toast('Key removed from this computer.', { type: 'success' }); } catch (e) { toastError(e); } });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'sVisKey') el.querySelector('#visSave').click(); });
     on(el, 'click', '#renameAll', () => openRenameAll());
     on(el, 'click', '#revealProj', () => post('/api/reveal', {}).catch(toastError));
   },

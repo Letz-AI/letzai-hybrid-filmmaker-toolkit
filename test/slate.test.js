@@ -1,0 +1,224 @@
+'use strict';
+// Reading slates with Claude: key handling, the request that is sent, parsing, flags, retries and failure modes.
+// Everything runs against a fake Anthropic server and ffmpeg-made clips.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const http = require('http');
+const { spawnSync } = require('child_process');
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-slate-'));
+process.env.LETZAI_KIT_HOME = path.join(tmp, 'home');
+delete process.env.ANTHROPIC_API_KEY;
+const ff = require('../server/lib/ffmpeg');
+const vision = require('../server/lib/vision');
+const slate = require('../server/lib/slate');
+const { createServer } = require('../server/index.js');
+const { startFakeAnthropic } = require('./helpers/fake-anthropic');
+
+const loc = ff.locate(true);
+const skip = !loc.ok && 'ffmpeg not installed';
+const TOKEN = 'slate-test-token';
+const reading = (o) => ({ slate_visible: true, scene: '6', shot: '2A', take: 3, confidence: 0.95, best_frame: 2, evidence: 'SCENE 6 / SHOT 2A / TAKE 3', ...o });
+
+test('field validation keeps only real slate numbers', () => {
+  assert.equal(vision.fieldOk('06'), '6');
+  assert.equal(vision.fieldOk('2a'), '2A');
+  assert.equal(vision.fieldOk('12A'), '12A');
+  assert.equal(vision.fieldOk('two'), null);
+  assert.equal(vision.fieldOk(null), null);
+  assert.equal(vision.fieldOk('1234'), null);
+});
+
+test('frame times stay inside short clips and the second pass looks further in', () => {
+  assert.deepEqual(slate.frameTimes(10, 0), [0.4, 1, 1.7, 2.5, 3.5, 4.8]);
+  assert.deepEqual(slate.frameTimes(2, 0), [0.4, 1]);
+  assert.deepEqual(slate.frameTimes(1, 0), [0.4]);
+  assert.equal(slate.frameTimes(0.4, 0).length, 1); // a clip shorter than the first frame still gets one
+  assert.deepEqual(slate.frameTimes(5, 1), []);
+  assert.equal(slate.frameTimes(30, 1)[0], 6);
+});
+
+let fake; let server; let port; let cookie = '';
+function req(method, url, { body } = {}) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const r = http.request({ host: '127.0.0.1', port, path: url, method, headers: { Host: `127.0.0.1:${port}`, ...(cookie ? { Cookie: cookie } : {}), ...(data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}) } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => { const t = Buffer.concat(chunks).toString('utf8'); let json = null; try { json = JSON.parse(t); } catch { /* not json */ } resolve({ status: res.statusCode, json, text: t }); });
+    });
+    r.on('error', reject);
+    if (data) r.write(data);
+    r.end();
+  });
+}
+async function waitJob(id) {
+  for (let i = 0; i < 200; i++) {
+    const j = (await req('GET', '/api/jobs')).json.jobs.find((x) => x.id === id);
+    if (j && (j.state === 'done' || j.state === 'error' || j.state === 'canceled')) return j;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error('job did not finish');
+}
+const library = async () => (await req('GET', '/api/library')).json.clips;
+
+test.after(async () => { try { server && server.close(); } catch { /* not started */ } if (fake) await fake.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
+
+test('reading slates: key, consent, request shape, results, flags, retries, failures, clearing', { skip }, async () => {
+  fake = await startFakeAnthropic();
+  process.env.ANTHROPIC_BASE_URL = fake.url;
+
+  const film = path.join(tmp, 'film');
+  fs.mkdirSync(film, { recursive: true });
+  const make = (n, secs) => assert.equal(spawnSync(loc.ffmpeg, ['-v', 'error', '-y', '-f', 'lavfi', '-i', `testsrc=size=640x360:rate=25:duration=${secs}`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(film, n)]).status, 0);
+  make('Film-scene6-shot2A-take1.mp4', 3);
+  make('A001_C001.mp4', 16);
+  make('A001_C002.mp4', 16);
+  make('A001_C003.mp4', 16);
+
+  ({ server } = createServer({ token: TOKEN, port: 0 }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  port = server.address().port;
+  server.close();
+  ({ server } = createServer({ token: TOKEN, port }));
+  await new Promise((r) => server.listen(port, '127.0.0.1', r));
+  // the cookie comes from the launch link
+  const launch = await new Promise((resolve) => http.get({ host: '127.0.0.1', port, path: `/?k=${TOKEN}`, headers: { Host: `127.0.0.1:${port}` } }, (res) => { res.resume(); resolve(res.headers['set-cookie'][0].split(';')[0]); }));
+  cookie = launch;
+
+  assert.equal((await req('POST', '/api/project/create', { body: { root: film, name: 'T', prefix: 'Film' } })).status, 200);
+  let clips;
+  for (let i = 0; i < 80; i++) { clips = await library(); if (clips.every((c) => c.probe)) break; await new Promise((r) => setTimeout(r, 100)); }
+  const raws = clips.filter((c) => c.kind === 'raw').sort((a, b) => a.name.localeCompare(b.name));
+  const named = clips.find((c) => c.kind === 'shot');
+
+  // nothing works before there is a key and consent
+  assert.equal((await req('GET', '/api/vision')).json.key.set, false);
+  const noKey = await req('POST', '/api/slate/read', { body: { keys: [raws[0].key] } });
+  assert.equal(noKey.status, 400);
+  assert.equal(noKey.json.code, 'no-vision-key');
+
+  // a wrong key is caught by the test call, and is not saved
+  const bad = await req('POST', '/api/vision/test', { body: { key: 'sk-ant-wrong', save: true } });
+  assert.equal(bad.status, 401);
+  assert.match(bad.json.error, /did not accept/i);
+  assert.equal((await req('GET', '/api/vision')).json.key.set, false);
+  // a good key is saved; the key never comes back to the browser
+  const good = await req('POST', '/api/vision/test', { body: { key: 'sk-ant-test', save: true } });
+  assert.equal(good.status, 200);
+  assert.equal(good.json.key.set, true);
+  assert.ok(!JSON.stringify(good.json).includes('sk-ant-test'));
+  assert.ok(fs.existsSync(path.join(process.env.LETZAI_KIT_HOME, 'config', 'anthropic.key')));
+  assert.equal((await req('PUT', '/api/vision', { body: { model: 'gpt-4' } })).status, 400);
+
+  const noConsent = await req('POST', '/api/slate/read', { body: { keys: [raws[0].key] } });
+  assert.equal(noConsent.json.code, 'no-consent');
+  await req('PUT', '/api/vision', { body: { consent: true, model: 'claude-haiku-5-5' } });
+
+  // estimate counts clips and frames
+  const est = (await req('POST', '/api/slate/estimate', { body: { keys: raws.map((c) => c.key) } })).json;
+  assert.equal(est.clips, 3);
+  assert.equal(est.frames, 18);
+  assert.ok(est.inputTokens > 10000);
+  assert.equal(est.model, 'claude-haiku-5-5');
+
+  // read one clip: request shape and result
+  fake.state.requests.length = 0;
+  fake.state.answers.push(reading({ scene: '06', shot: '2a', take: 2 }));
+  const one = await req('POST', '/api/slate/read', { body: { keys: [raws[0].key] } });
+  assert.equal(one.status, 200, one.text);
+  assert.equal((await waitJob(one.json.job)).state, 'done');
+  const sent = fake.state.requests.filter((r) => r.body.tools);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].key, 'sk-ant-test');
+  assert.equal(sent[0].version, '2023-06-01');
+  assert.equal(sent[0].body.model, 'claude-haiku-5-5');
+  assert.deepEqual(sent[0].body.tool_choice, { type: 'tool', name: 'report_slate' });
+  const imgs = sent[0].body.messages[0].content.filter((c) => c.type === 'image');
+  assert.equal(imgs.length, 6);
+  assert.equal(imgs[0].source.media_type, 'image/jpeg');
+  assert.ok(Buffer.from(imgs[0].source.data, 'base64').slice(0, 2).equals(Buffer.from([0xff, 0xd8])), 'a real JPEG was sent');
+  assert.ok(!JSON.stringify(sent[0].body).includes('A001_C001'), 'file names are not sent');
+  clips = await library();
+  let r0 = clips.find((c) => c.key === raws[0].key);
+  assert.deepEqual([r0.slate.scene, r0.slate.shot, r0.slate.take, r0.slate.status], ['6', '2A', 2, 'new']);
+  assert.deepEqual(r0.slate.flags, []);
+  assert.ok(r0.slate.tokens.in >= 5000);
+
+  // already-read clips are skipped (no second charge) unless forced
+  fake.state.requests.length = 0;
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[0].key] } })).json.job)).state, 'done');
+  assert.equal(fake.state.requests.filter((r) => r.body.tools).length, 0);
+
+  // flags: a take that exists, the same reading twice, an earlier recording with a higher take, low confidence
+  fake.state.answers.push(reading({ take: 1 }));                       // taken by Film-scene6-shot2A-take1
+  fake.state.answers.push(reading({ take: 2, confidence: 0.6 }));      // same as raws[0], and not sure
+  const two = await req('POST', '/api/slate/read', { body: { keys: [raws[1].key] } });
+  assert.equal((await waitJob(two.json.job)).state, 'done');
+  const three = await req('POST', '/api/slate/read', { body: { keys: [raws[2].key] } });
+  assert.equal((await waitJob(three.json.job)).state, 'done');
+  clips = await library();
+  const f1 = clips.find((c) => c.key === raws[1].key).slate;
+  const f2 = clips.find((c) => c.key === raws[2].key).slate;
+  assert.ok(f1.flags.includes('taken'));
+  assert.ok(f2.flags.includes('low'));
+  assert.ok(f2.flags.includes('twice'));
+  assert.ok(clips.find((c) => c.key === raws[0].key).slate.flags.includes('twice'));
+
+  // a named take: matches, or differs
+  fake.state.answers.push(reading({ take: 1 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [named.key] } })).json.job)).state, 'done');
+  assert.equal((await library()).find((c) => c.key === named.key).slate.status, 'match');
+  fake.state.answers.push(reading({ take: 5 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [named.key], force: true } })).json.job)).state, 'done');
+  const diff = (await library()).find((c) => c.key === named.key).slate;
+  assert.equal(diff.status, 'differs');
+  assert.equal(diff.take, 5);
+
+  // a scene that is not in the shot list is flagged; one that is, is not
+  assert.equal((await req('PUT', '/api/shotlist', { body: { text: ['# Scene 6', '6.2A wide'].join('\n') } })).status, 200);
+  fake.state.answers.push(reading({ scene: '9', shot: '1', take: 1 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[1].key], force: true } })).json.job)).state, 'done');
+  assert.ok((await library()).find((c) => c.key === raws[1].key).slate.flags.includes('not-in-plan'));
+  fake.state.answers.push(reading({ scene: '6', shot: '2A', take: 8 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[1].key], force: true } })).json.job)).state, 'done');
+  assert.ok(!(await library()).find((c) => c.key === raws[1].key).slate.flags.includes('not-in-plan'));
+
+  // the reading follows the clip when it is renamed
+  const rn = await req('POST', '/api/clip/rename', { body: { key: raws[0].key, scene: '6', shot: '2A', take: 2 } });
+  assert.equal(rn.status, 200, rn.text);
+  const renamed = (await library()).find((c) => c.name === 'Film-scene6-shot2A-take2.mp4');
+  assert.equal(renamed.slate.status, 'match');
+
+  // no slate in the first pass: the second pass looks further in, and an unreadable result is kept (no repeat charge)
+  fake.state.requests.length = 0;
+  fake.state.answers.push({ slate_visible: false, scene: null, shot: null, take: null, confidence: 0, evidence: '' });
+  fake.state.answers.push(reading({ scene: '7', shot: '1', take: 4, best_frame: 3 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[1].key], force: true } })).json.job)).state, 'done');
+  assert.equal(fake.state.requests.filter((r) => r.body.tools).length, 2);
+  const late = (await library()).find((c) => c.key === raws[1].key).slate;
+  assert.deepEqual([late.scene, late.shot, late.take, late.pass], ['7', '1', 4, 2]);
+  assert.equal(late.frameT, 9);
+
+  // temporary trouble is retried; a bad key or an empty account stops the run with a clear message
+  fake.state.fail = { status: 429, message: 'slow down', times: 1 };
+  fake.state.answers.push(reading({ scene: '9', shot: '1', take: 1 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key], force: true } })).json.job)).state, 'done');
+  fake.state.fail = { status: 400, message: 'Your credit balance is too low to access the Anthropic API.', times: 99 };
+  const broke = await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[1].key, raws[2].key], force: true } })).json.job);
+  assert.equal(broke.state, 'error');
+  assert.match(broke.error, /no credit left/i);
+  fake.state.fail = null;
+
+  // clearing readings
+  assert.equal((await req('POST', '/api/slate/clear', { body: { keys: [raws[1].key, raws[2].key] } })).json.cleared, 2);
+  assert.equal((await library()).find((c) => c.key === raws[1].key).slate, null);
+
+  // removing the key
+  await req('PUT', '/api/vision', { body: { key: '' } });
+  assert.equal((await req('GET', '/api/vision')).json.key.set, false);
+  assert.ok(!fs.existsSync(path.join(process.env.LETZAI_KIT_HOME, 'config', 'anthropic.key')));
+});

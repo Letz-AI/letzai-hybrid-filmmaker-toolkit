@@ -23,6 +23,7 @@ function cacheDir() {
 
 const configFile = () => path.join(configDir(), 'config.json');
 const keyFile = () => path.join(configDir(), 'letzai.key');
+const anthropicKeyFile = () => path.join(configDir(), 'anthropic.key');
 
 function loadConfig() {
   return { recent: [], ...readJson(configFile(), {}) };
@@ -57,6 +58,37 @@ async function setKey(key) {
   fs.writeFileSync(keyFile(), k, { mode: 0o600 });
 }
 
+/** Anthropic (Claude) key for reading slates: environment first, then a user-only file. Never leaves this computer except to api.anthropic.com. */
+function getAnthropicKey() {
+  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY.trim();
+  try { return fs.readFileSync(anthropicKeyFile(), 'utf8').trim() || null; } catch { return null; }
+}
+
+function anthropicKeySource() {
+  if (process.env.ANTHROPIC_API_KEY) return 'environment';
+  return fs.existsSync(anthropicKeyFile()) ? 'file' : null;
+}
+
+async function setAnthropicKey(key) {
+  const k = String(key || '').trim();
+  if (!k) { try { fs.unlinkSync(anthropicKeyFile()); } catch { /* already gone */ } return; }
+  fs.mkdirSync(configDir(), { recursive: true });
+  fs.writeFileSync(anthropicKeyFile(), k, { mode: 0o600 });
+}
+
+/** Per-user choices for reading slates with Claude. `consent` is the person agreeing that video frames are sent to Anthropic. */
+function visionSettings() {
+  const v = loadConfig().vision || {};
+  return { model: v.model || 'claude-sonnet-5-5', consent: !!v.consent };
+}
+
+async function setVisionSettings(patch) {
+  const c = loadConfig();
+  c.vision = { ...visionSettings(), ...patch };
+  await saveConfig(c);
+  return visionSettings();
+}
+
 async function rememberProject(root, name) {
   const cfg = loadConfig();
   cfg.recent = [{ root, name, openedAt: new Date().toISOString() }, ...cfg.recent.filter((r) => r.root !== root)].slice(0, 12);
@@ -69,4 +101,4 @@ async function forgetProject(root) {
   await saveConfig(cfg);
 }
 
-module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, rememberProject, forgetProject, APP_DIR_NAME };
+module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, getAnthropicKey, anthropicKeySource, setAnthropicKey, visionSettings, setVisionSettings, rememberProject, forgetProject, APP_DIR_NAME };

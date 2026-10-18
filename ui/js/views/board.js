@@ -5,6 +5,7 @@ import { S, scenes, totals, clips, allClips, takesOf, clip, folders, folderLabel
 import { toast, toastError, openMenu } from '../ui.js';
 import { folderButton, folderChip, wireFolderControls } from '../folderpick.js';
 import { openRenameTakes, takesOfScene } from '../renametakes.js';
+import { openSlateReader } from '../slate.js';
 import { openShotList, addShotDialog, addSceneDialog, planOp } from './shotlist.js';
 
 let root;
@@ -124,7 +125,7 @@ function clipsTable() {
   const rows = clips().filter((c) => !q || `${c.name} ${c.orig} ${c.note} ${c.scene}.${c.shot}`.toLowerCase().includes(q));
   if (!rows.length) return html`<div class="app-empty"><div class="app-empty-title">No clips match</div></div>`;
   for (const k of [...ticked]) if (!clip(k)) ticked.delete(k);
-  const bar = ticked.size ? html`<div class="tick-bar"><b>${plural(ticked.size, 'take')} selected</b><span class="grow"></span><button class="app-btn app-btn--sm" id="tickClear">Clear</button><button class="app-btn app-btn--sm app-btn--primary" id="renameTicked">${icon('pencil', 14)}<span>Rename selected…</span></button></div>` : html`<div class="faint" style="font-size:12px;margin:0 0 8px">Tick takes to rename several at once.</div>`;
+  const bar = ticked.size ? html`<div class="tick-bar"><b>${plural(ticked.size, 'take')} selected</b><span class="grow"></span><button class="app-btn app-btn--sm" id="tickClear">Clear</button><button class="app-btn app-btn--sm" id="checkTicked" title="Read the slates again and compare them with the names">${icon('bolt', 14)}<span>Check with Claude…</span></button><button class="app-btn app-btn--sm app-btn--primary" id="renameTicked">${icon('pencil', 14)}<span>Rename selected…</span></button></div>` : html`<div class="faint" style="font-size:12px;margin:0 0 8px">Tick takes to rename several at once.</div>`;
   const byFolder = hasManyFolders();
   let lastGroup = '';
   return html`${bar}<table class="table clip-table">
@@ -294,6 +295,7 @@ export default {
     on(el, 'click', '[data-tick]', (e, box) => { e.stopPropagation(); if (box.checked) ticked.add(box.dataset.tick); else ticked.delete(box.dataset.tick); this.update(); });
     on(el, 'click', '#tickAll', (e, box) => { e.stopPropagation(); const rows = clips().filter((c) => c.kind === 'shot'); if (box.checked) rows.forEach((c) => ticked.add(c.key)); else ticked.clear(); this.update(); });
     on(el, 'click', '#tickClear', () => { ticked.clear(); this.update(); });
+    on(el, 'click', '#checkTicked', () => openSlateReader({ keys: [...ticked], force: true, title: `Check ${plural(ticked.size, 'take')} with Claude` }));
     on(el, 'click', '#renameTicked', () => openRenameTakes([...ticked], { afterRename: () => ticked.clear() }));
     on(el, 'click', '[data-act="open-shot"]', (e, c) => openShot(c.dataset.scene, c.dataset.shot));
     on(el, 'click', '[data-act="open-clip"]', (e, c) => { if (e.target.closest('input')) return; window.kitGo('review', c.dataset.key); });

@@ -4,6 +4,7 @@ import { post, patch } from '../api.js';
 import { S, clips, allClips, clip, loadLibrary, hasManyFolders, folderLabel } from '../store.js';
 import { folderButton, wireFolderControls } from '../folderpick.js';
 import { toast, toastError, openPopup, field } from '../ui.js';
+import { openSlateReader } from '../slate.js';
 
 const setSkip = (k, v) => patch('/api/clip', { key: k, patch: { skip: v } });
 
@@ -166,7 +167,9 @@ function renderQueue() {
   mount($('#igQueue', root), html`
     <div class="nav-head"><div class="row"><span class="grow rail-label" style="padding:0">Unnamed clips</span><span class="faint tnum">${q.length}</span></div>${hasManyFolders() || S.filters.folder ? html`<div style="margin-top:8px">${folderButton()}</div>` : ''}
       ${q.length > 1 ? html`<button class="app-btn app-btn--primary" id="bulkName" style="width:100%;margin-top:10px" title="Name many clips in one go">${icon('slate')}<span>${picked.size ? `Name ${plural(picked.size, 'ticked clip')}…` : 'Name several at once…'}</span></button>
-        <div class="row" style="margin-top:8px;gap:8px"><label class="row" style="gap:8px;cursor:pointer" title="Tick clips here to pre-select them"><input type="checkbox" class="app-check" id="pickAll" ${picked.size && picked.size === q.length ? 'checked' : ''}><span class="faint">${picked.size ? `${picked.size} ticked` : 'Tick clips'}</span></label><span class="grow"></span>${picked.size ? html`<button class="app-btn app-btn--sm" id="clearPick">Clear</button>` : ''}</div>` : ''}</div>
+        <div class="row" style="margin-top:8px;gap:8px"><label class="row" style="gap:8px;cursor:pointer" title="Tick clips here to pre-select them"><input type="checkbox" class="app-check" id="pickAll" ${picked.size && picked.size === q.length ? 'checked' : ''}><span class="faint">${picked.size ? `${picked.size} ticked` : 'Tick clips'}</span></label><span class="grow"></span>${picked.size ? html`<button class="app-btn app-btn--sm" id="clearPick">Clear</button>` : ''}</div>` : ''}
+      ${q.length ? html`<button class="app-btn" id="claudeAll" style="width:100%;margin-top:8px" title="Let Claude read the slates and suggest names">${icon('bolt')}<span>${picked.size ? `Read ${plural(picked.size, 'ticked slate')} with Claude…` : 'Read all slates with Claude…'}</span></button>` : ''}
+      ${q.some((c) => c.slate) ? html`<button class="app-btn app-btn--sm" id="claudeSee" style="width:100%;margin-top:6px">${icon('list', 14)}<span>Review ${plural(q.filter((c) => c.slate).length, 'reading')}</span></button>` : ''}</div>
     <div class="nav-tree ig-list">
       ${q.map((c) => html`<div class="ig-row"><input type="checkbox" class="app-check ig-check" data-pick="${c.key}" ${picked.has(c.key) ? 'checked' : ''} aria-label="Select ${c.orig || c.name}"><button class="ig-item ${c.key === key ? 'active' : ''} ${picked.has(c.key) ? 'picked' : ''}" data-q="${c.key}">
         <span class="mini-poster"><img loading="lazy" alt="" src="${frameUrl(c, clamp(c.duration ? Math.min(1, c.duration / 2) : 1, 0, 2), 200)}" onerror="this.style.visibility='hidden'"></span>
@@ -211,6 +214,7 @@ function renderMain() {
           <div class="mono-name"><b>${c.orig || c.name}</b></div>
           <div class="faint">${c.recordedAt ? `${fmtDay(c.recordedAt)} ${fmtClock(c.recordedAt)} · ` : ''}${fmtDur(c.duration)}${c.probe ? ` · ${c.probe.width}×${c.probe.height}` : ''}</div>
         </div>
+        <div id="igClaude"></div>
         <div class="ig-fields">
           ${['Scene', 'Shot', 'Take'].map((l, i) => html`<div class="app-field"><label for="i${l}">${l}</label><input class="app-input lg" id="i${l}" data-f="${l.toLowerCase()}" inputmode="${l === 'Shot' ? 'text' : 'numeric'}" autocomplete="off" spellcheck="false" maxlength="6" value="${[pred.scene, pred.shot, pred.take][i]}"></div>`)}
         </div>
@@ -236,12 +240,25 @@ function renderMain() {
       </div>
     </div>
     <div class="faint" style="padding:0 0 8px;font-size:12px">${n} left · Tab moves between fields · Enter applies and jumps to the next clip</div>`);
+  renderClaudeBox();
   checkConflict();
   const f = $('#iScene', root); const sh = $('#iShot', root); const tk = $('#iTake', root);
   // Focus the field most likely to need typing: scene/shot when there is no prediction, else the shot.
   (pred.ref ? sh : f).focus(); (pred.ref ? sh : f).select();
   touchedTake = false;
   void tk;
+}
+
+/** What Claude read from this clip's slate, with a button to use it. */
+function renderClaudeBox() {
+  const box = $('#igClaude', root);
+  const c = key && clip(key);
+  if (!box || !c) return;
+  const s = c.slate;
+  const flags = s && s.flags && s.flags.length ? html`<div style="font-size:12px;color:var(--color-warning);margin-top:2px">${s.flags.map((f) => ({ low: 'Not sure', partial: 'Only part of the slate was readable', taken: 'That take already exists', twice: 'Another clip was read the same', 'not-in-plan': 'Scene is not in the shot list', order: 'Out of recording order' }[f] || f)).join(' · ')}</div>` : '';
+  mount(box, !s ? html`<button class="app-btn app-btn--sm" id="igClaude1" title="Let Claude read this slate">${icon('bolt', 14)}<span>Read this slate with Claude</span></button>`
+    : s.status === 'unreadable' ? html`<div class="claude-box"><div class="grow"><b>Claude found no readable slate</b><div class="faint" style="font-size:12px">${s.evidence || 'It looked at the first seconds and further in.'} Look for it yourself with the buttons under the picture.</div></div><button class="app-btn app-btn--sm" id="igClaude1">Read again</button></div>`
+      : html`<div class="claude-box"><div class="grow"><div><span class="faint">Claude reads</span> <b class="tnum">${s.scene} · ${s.shot} · take ${s.take}</b> <span class="app-chip xs ${s.confidence >= 0.85 && !(s.flags || []).length ? 'app-chip--success' : 'app-chip--warning'}">${Math.round(s.confidence * 100)}%</span></div><div class="faint" style="font-size:12px">${s.evidence ? `Slate says “${s.evidence}”` : ''}${s.frameT != null ? ` · frame at ${s.frameT.toFixed(1)} s` : ''}</div>${flags}</div><button class="app-btn app-btn--sm app-btn--outline" data-fill="${s.scene}|${s.shot}|${s.take}" id="igUseClaude">Use this</button><button class="app-icon-btn app-icon-btn--sm" id="igClaude1" title="Read again">${icon('regenerate', 14)}</button></div>`);
 }
 
 const nextShotId = (s) => (/^\d+$/.test(s) ? String(+s + 1) : String((parseInt(s, 10) || 0) + 1));
@@ -328,6 +345,9 @@ export default {
     on(el, 'change', '#pickAll', (e, box) => { const q = queue(); if (box.checked) q.forEach((c) => picked.add(c.key)); else picked.clear(); renderQueue(); });
     on(el, 'click', '#clearPick', () => { picked.clear(); renderQueue(); });
     on(el, 'click', '#bulkName', () => openBulkName());
+    on(el, 'click', '#claudeAll', () => openSlateReader({ keys: picked.size ? [...picked] : queue().map((c) => c.key) }));
+    on(el, 'click', '#claudeSee', () => import('../slate.js').then((m) => m.openReadings(queue().filter((c) => c.slate).map((c) => c.key))));
+    on(el, 'click', '#igClaude1', () => openSlateReader({ keys: [key], force: !!(clip(key) && clip(key).slate) }));
     on(el, 'click', '[data-t]', (e, b) => frameTo(parseFloat(b.dataset.t)));
     on(el, 'input', '#slateT', (e, r) => { t = parseFloat(r.value); frameToSoon(t); });
     el.addEventListener('input', (e) => {
@@ -376,7 +396,7 @@ export default {
     if (!key && q.length) key = q[0].key;
     renderQueue();
     // keep what the user is typing; only rebuild the main pane if the clip itself changed
-    if ($('#igMain', root).dataset.key !== String(key || '')) renderMain();
+    if ($('#igMain', root).dataset.key !== String(key || '')) renderMain(); else renderClaudeBox();
   },
   unmount() { root = null; key = null; },
 };

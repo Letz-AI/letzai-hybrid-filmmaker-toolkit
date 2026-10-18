@@ -10,6 +10,7 @@ const { formatStem, parseName, isVideoFile, RATINGS } = require('./names');
 const { buildCoverage } = require('./coverage');
 const { parseShotListText, shotListToText } = require('./shotlist');
 const { parseCsv, toCsv } = require('./csv');
+const { view: slateView } = require('./slate');
 const { hash, readJson, atomicWrite, toPosix, compareShots, natCompare, httpError, mapLimit, formatTime, limiter, renameRetry, explainRename, pathKey } = require('./util');
 
 // Thumbnails are requested in bursts (a whole Board at once). Never run more than a few ffmpeg processes for them,
@@ -102,7 +103,7 @@ class Project extends EventEmitter {
     clearTimeout(this._saveTimer);
     // Drop empty metadata so the file stays small.
     for (const [k, m] of Object.entries(this.state.clips)) {
-      const keep = m.rating || m.print || m.note || m.skip || (m.tags && m.tags.length) || (m.marks && m.marks.length) || (m.cuts && m.cuts.length) || (m.ai && m.ai.length) || m.orig;
+      const keep = m.rating || m.print || m.note || m.skip || (m.tags && m.tags.length) || (m.marks && m.marks.length) || (m.cuts && m.cuts.length) || (m.ai && m.ai.length) || m.slate || m.orig;
       if (!keep) delete this.state.clips[k];
     }
     this.state.history = this.state.history.slice(0, 100);
@@ -199,6 +200,8 @@ class Project extends EventEmitter {
         e.cutRanges = m.cuts || [];
         // generated versions of this take (files on disk or links to the canvas)
         e.ai = (m.ai || []).map((a) => ({ ...a, name: a.kind === 'file' ? path.basename(a.path) : a.label, missing: a.kind === 'file' && !fs.existsSync(a.path) }));
+        // what Claude read from the slate (kept only while the file is the one that was read)
+        e.slate = m.slate && m.slate.sig === e.sig ? m.slate : null;
         e.orig =m.orig || (e.kind === 'raw' ? e.name : '');
         e.probe = probe && !probe.error ? probe : null;
         e.duration = e.probe ? e.probe.duration : 0;
@@ -290,7 +293,7 @@ class Project extends EventEmitter {
 
   toClient(e) {
     const { abs, parsed, camProxy, mtimeMs, ...rest } = e;
-    return { ...rest, hasCamProxy: !!camProxy, canvasError: this.canvasErrors.get(e.key) || null };
+    return { ...rest, hasCamProxy: !!camProxy, canvasError: this.canvasErrors.get(e.key) || null, slate: slateView(this, e) };
   }
 
   snapshot() {

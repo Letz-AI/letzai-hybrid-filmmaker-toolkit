@@ -7,7 +7,7 @@
 
 **Review your shoot, see which shots are still missing, name and select your takes, and send the best ones to a [LetzAI Canvas](https://www.letz.ai/canvas).**
 
-It runs on your own computer, with your own footage and your own LetzAI API key. Nothing is uploaded except the clips you choose to send to your canvas. No account is needed to use the review tools, and there is nothing to build: you install Node.js and ffmpeg, download this repository, and start it.
+It runs on your own computer, with your own footage and your own LetzAI API key. Nothing is uploaded except the clips you choose to send to your canvas, and, only if you switch it on, a few frames per clip for Claude to read the slate. No account is needed to use the review tools, and there is nothing to build: you install Node.js and ffmpeg, download this repository, and start it.
 
 Made for a hybrid workflow: shoot real footage, name and select it quickly, then bring the best takes into LetzAI to generate around them.
 
@@ -15,7 +15,7 @@ Made for a hybrid workflow: shoot real footage, name and select it quickly, then
 
 ## Contents
 
-[What it does](#what-it-does) · [Install](#install) · [First session](#first-session) · [The tour](#the-tour) · [Compare](#compare-original-vs-ai) · [Shot list](#the-shot-list) · [Keyboard](#keyboard) · [File names](#how-files-are-named-and-renamed) · [LetzAI Canvas](#the-letzai-canvas-connection) · [4K and HEVC](#playback-4k-and-hevc) · [Your data](#your-data-and-privacy) · [Troubleshooting](#troubleshooting) · [Development](#development)
+[What it does](#what-it-does) · [Install](#install) · [First session](#first-session) · [The tour](#the-tour) · [Claude](#claude-reading-slates) · [Compare](#compare-original-vs-ai) · [Shot list](#the-shot-list) · [Keyboard](#keyboard) · [File names](#how-files-are-named-and-renamed) · [LetzAI Canvas](#the-letzai-canvas-connection) · [4K and HEVC](#playback-4k-and-hevc) · [Your data](#your-data-and-privacy) · [Troubleshooting](#troubleshooting) · [Development](#development)
 
 ## What it does
 
@@ -24,6 +24,7 @@ Made for a hybrid workflow: shoot real footage, name and select it quickly, then
 | **Board** | Your shot list laid over what was actually shot. Every scene and shot with a thumbnail, take count, status and warnings. Missing shots are called out. |
 | **Review** | A frame-accurate player built for dailies. Rate takes (void, ok, good), circle the one to print, write notes, set markers, mark in and out points, compare two takes side by side. Everything on the keyboard. |
 | **Ingest** | Name raw camera files from the slate (the *Klappe*). Read it, type scene, shot and take, press Enter, next clip. Or select many clips and name them in one go. Every rename can be undone. |
+| **Claude** | Add your own Anthropic API key and Claude reads the slate on each clip and suggests scene, shot and take. It works on unnamed clips and can re-check named takes, flagging names that do not match the slate. Nothing is renamed without your confirmation. |
 | **Rename** | Fix names later: one take, a whole shot, a whole scene or any selection. Change scene or shot and renumber takes. Or apply a new naming scheme to every file at once. |
 | **Folders** | A film is often several shoot days. Filter every view to one folder, browse folders as cards, and get told when new footage appears that the project does not look at yet. |
 | **Compare** | Map the AI videos you generated to the take they came from, then judge them against the original with a slider, side by side, a cross-fade or a difference view. Both play in sync, frame by frame. |
@@ -186,6 +187,19 @@ Change the scene or shot (leave a field empty to keep it) and optionally renumbe
 
 **Rename all files** (*Settings → Naming*, the project menu, or `Ctrl K`) applies the current prefix, number padding and rating tags to every take you have named.
 
+### Claude: reading slates
+
+Typing every slate by hand is the slow part of ingest. With your own Anthropic API key, Claude does the reading and you do the checking.
+
+1. **Add a key.** *Settings → Claude: reading slates*, or just press **Read all slates with Claude…** in Ingest and the dialog asks for it. Create the key in the [Anthropic Console](https://console.anthropic.com/settings/keys) (the account needs some credit). The key is tested when you save it, and stored only on your computer.
+2. **Choose the clips.** In Ingest, tick clips or read all of them. For **named takes**, use *Review → Rename ▾ → Check this name* (or the whole shot), tick takes on the Board and press **Check with Claude…**, or `Ctrl K` → *Check names*.
+3. **Confirm what is sent.** The dialog shows how many clips and roughly how many tokens, lets you pick the model (Sonnet by default, Haiku is cheaper, Opus more careful) and asks you to agree that frames are sent to Anthropic. About six pictures from the start of each clip are sent; if no slate is there, six more from further in. File names are not sent.
+4. **Review the readings.** Each row shows the frame Claude read (click it to enlarge), what the slate says, the reading in three editable boxes, and how sure Claude is. Readings are flagged when the take already exists, another clip was read as the same take, the scene is not in your shot list, the number does not fit the recording order, or Claude is not sure. Confident, unflagged readings can be ticked in one click. Press **Rename** to apply them; it is one undo.
+
+![Claude's readings: check, correct, apply](docs/screenshots/claude-slates.png)
+
+Claude never guesses a number it cannot read: those clips come back as "no readable slate" for you to look at. Results are saved with the clip, so reading it again only happens when you ask for it (the *read again* switch). For named takes, rows that agree with the file name are collapsed into a count, and only the ones that differ ask for your attention.
+
 ### Canvas
 
 Cut takes into snippets and send them to LetzAI. See [The LetzAI Canvas connection](#the-letzai-canvas-connection).
@@ -275,9 +289,11 @@ For instant playback with no copies: on Windows install **HEVC Video Extensions*
 |---|---|
 | Ratings, notes, cuts, markers, shot list, naming and canvas settings, rename history | `letzai-kit.json` in your film folder. Plain JSON, safe to sync or commit. |
 | Review copies, thumbnails, probe cache | Your user cache folder. Safe to delete. |
-| API key | Your user settings folder, never in the film folder. The `LETZAI_API_KEY` environment variable also works. |
+| LetzAI API key | Your user settings folder, never in the film folder. The `LETZAI_API_KEY` environment variable also works. |
+| Anthropic API key (optional) | Your user settings folder (`anthropic.key`, readable only by you), never in the film folder. The `ANTHROPIC_API_KEY` environment variable also works. |
+| What Claude read from slates | In `letzai-kit.json`, next to the clip. |
 
-The server listens on `127.0.0.1` only. Every request needs a random key from the launch link, and requests with a foreign `Host` header are refused, so other websites cannot talk to it. Nothing leaves your computer except what you send to your canvas.
+The server listens on `127.0.0.1` only. Every request needs a random key from the launch link, and requests with a foreign `Host` header are refused, so other websites cannot talk to it. Nothing leaves your computer except what you send to your canvas, and, only if you add an Anthropic key and confirm it, the few frames per clip that Claude reads (sent to `api.anthropic.com`, never anywhere else). Without a key the Claude buttons only offer to set one up.
 
 ## Troubleshooting
 

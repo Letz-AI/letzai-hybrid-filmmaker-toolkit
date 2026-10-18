@@ -39,6 +39,7 @@ class App extends EventEmitter {
       ffmpeg: loc.ok ? { ok: true, version: loc.version, path: loc.ffmpeg } : { ok: false, missing: loc.missing || 'ffmpeg' },
       system: ff.describeSystem(),
       key: { set: !!cfg.getKey(), source: cfg.keySource() },
+      vision: { keySet: !!cfg.getAnthropicKey(), ...cfg.visionSettings() },
       recent: cfg.loadConfig().recent.filter((r) => fs.existsSync(r.root)),
       project: this.project ? this.project.summary() : null,
     };

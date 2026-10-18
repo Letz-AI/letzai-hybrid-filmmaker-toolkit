@@ -11,7 +11,7 @@ Where the kit could go next. Nothing here is promised; it is a list of ideas, ro
 
 ## Faster, smarter ingest
 
-- **Read the slate automatically.** Suggest scene, shot and take from the first seconds of each clip with a vision model, with your confirmation before anything is renamed. This is the biggest time saver after the review tools themselves; it needs an explicit opt-in because frames leave the computer.
+- **Slate reading, next steps.** Slate reading with Claude exists (your own Anthropic key, confirmation before any rename). Still to do: other providers (an OpenAI-compatible endpoint, a local model through Ollama, the Claude Code CLI) for people without an API key, and naming clips that have no slate at all by what is in the picture, matched against the descriptions in the shot list.
 - **Clap sync and audio.** Waveform in Review, sync double-system sound to picture by the clap, and name audio files from the slate too.
 - **Offload verification.** Checksum files after copying from the card (and write a simple report), so you know the footage is safe before you format it.
 - **Watch folders.** Notice new clips as they land (card dump, Dropbox) and offer to name them, instead of on rescan.

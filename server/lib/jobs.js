@@ -3,7 +3,7 @@
 const { EventEmitter } = require('events');
 const crypto = require('crypto');
 
-const LANE_LIMITS = { proxy: 2, cut: 1, upload: 2, misc: 2 };
+const LANE_LIMITS = { proxy: 2, cut: 1, upload: 2, misc: 2, vision: 1 };
 // Quiet background work gets fewer slots than the lane: the rest are kept free for something you are waiting for.
 const BACKGROUND_LIMITS = { proxy: 1 };
 
@@ -11,8 +11,8 @@ class Jobs extends EventEmitter {
   constructor() {
     super();
     this.list = [];
-    this.running = { proxy: 0, cut: 0, upload: 0, misc: 0 };
-    this.runningBg = { proxy: 0, cut: 0, upload: 0, misc: 0 };
+    this.running = { proxy: 0, cut: 0, upload: 0, misc: 0, vision: 0 };
+    this.runningBg = { proxy: 0, cut: 0, upload: 0, misc: 0, vision: 0 };
     this.paused = new Set(); // lanes whose queued background jobs should wait
   }
 
