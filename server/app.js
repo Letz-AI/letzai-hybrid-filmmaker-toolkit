@@ -187,6 +187,24 @@ class App extends EventEmitter {
     }
   }
 
+  /** Videos on the canvas that are not the kit's own clips: where generated results live. */
+  async canvasMedia() {
+    const t = this.canvasTarget();
+    const tp = await this.targetPages();
+    const out = [];
+    for (const pg of tp.pages) {
+      const page = await this.client.getPage(t.canvasId, pg.id);
+      for (const n of page.nodes || []) {
+        if (n.kind !== 'media' || String(n.clientNodeId || '').startsWith('ltn') || !n.data || !n.data.url) continue;
+        const isVideo = n.data.type === 'video' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(n.data.url);
+        if (!isVideo) continue;
+        out.push({ nodeId: n.id, url: n.data.url, width: n.data.naturalW || 0, height: n.data.naturalH || 0, page: pg.name || this.requireProject().state.canvas.pageName || '', createdAt: n.createdAt || '' });
+      }
+    }
+    out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    return out.slice(0, 300);
+  }
+
   async sortCanvas() {
     const t = this.canvasTarget();
     return this._locked(async () => {

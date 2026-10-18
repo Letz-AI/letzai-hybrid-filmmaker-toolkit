@@ -15,7 +15,7 @@ Made for a hybrid workflow: shoot real footage, name and select it quickly, then
 
 ## Contents
 
-[What it does](#what-it-does) · [Install](#install) · [First session](#first-session) · [The tour](#the-tour) · [Shot list](#the-shot-list) · [Keyboard](#keyboard) · [File names](#how-files-are-named-and-renamed) · [LetzAI Canvas](#the-letzai-canvas-connection) · [4K and HEVC](#playback-4k-and-hevc) · [Your data](#your-data-and-privacy) · [Troubleshooting](#troubleshooting) · [Development](#development)
+[What it does](#what-it-does) · [Install](#install) · [First session](#first-session) · [The tour](#the-tour) · [Compare](#compare-original-vs-ai) · [Shot list](#the-shot-list) · [Keyboard](#keyboard) · [File names](#how-files-are-named-and-renamed) · [LetzAI Canvas](#the-letzai-canvas-connection) · [4K and HEVC](#playback-4k-and-hevc) · [Your data](#your-data-and-privacy) · [Troubleshooting](#troubleshooting) · [Development](#development)
 
 ## What it does
 
@@ -26,6 +26,7 @@ Made for a hybrid workflow: shoot real footage, name and select it quickly, then
 | **Ingest** | Name raw camera files from the slate (the *Klappe*). Read it, type scene, shot and take, press Enter, next clip. Or select many clips and name them in one go. Every rename can be undone. |
 | **Rename** | Fix names later: one take, a whole shot, a whole scene or any selection. Change scene or shot and renumber takes. Or apply a new naming scheme to every file at once. |
 | **Folders** | A film is often several shoot days. Filter every view to one folder, browse folders as cards, and get told when new footage appears that the project does not look at yet. |
+| **Compare** | Map the AI videos you generated to the take they came from, then judge them against the original with a slider, side by side, a cross-fade or a difference view. Both play in sync, frame by frame. |
 | **Canvas** | Cut takes into snippets of at most 30 seconds and send them to a LetzAI Canvas, on one page or one page per scene. Every upload is verified, nothing is sent twice, and anything that fails stays on screen with the reason and a Retry. |
 
 ## Install
@@ -149,6 +150,20 @@ Frame-accurate stepping (`←` `→`), speeds (`J` `K` `L`), in and out points (
 
 ![Compare two takes in focus mode](docs/screenshots/compare.png)
 
+### Compare: original vs AI
+
+Generated a restyled version of a take? Map it to the original and see exactly what changed.
+
+1. Open **Compare** (`g` then `m`) and press **Add AI results…**. Choose the video files, pick them **from the canvas** (generations on your LetzAI Canvas), or paste an `https://` link. The kit guesses the take from the file name (`...scene6_shot2_take3_cut-2_v1.mp4`, the full take name, or the camera clip name); change it in the take menu if it guessed wrong or could not tell.
+2. An AI clip is usually made from a *piece* of the take, such as snippet 2 you sent to the canvas. Say which snippet (or how many seconds into the take it starts) and both videos play in step. You can nudge the offset frame by frame.
+3. Judge it. **Slider**: drag the divider, original on one side, AI on the other. **Side**: both next to each other. **Fade**: cross-fade between them. **Diff**: shows what changed, brightened. Several AI versions of one take sit in a strip below; switch between them to pick the best.
+
+![Slider: original on the left, AI version on the right](docs/screenshots/ai-compare.png)
+
+![Difference view highlights what the AI changed](docs/screenshots/ai-compare-diff.png)
+
+Notes and labels are saved per AI result. Removing a result only forgets the mapping; the video file is never touched, and the mapping follows the take when you rename it.
+
 ### Ingest: naming clips from the slate
 
 Each unnamed clip shows a big frame to read the slate from (click to enlarge; the buttons jump to later frames in case the slate comes in late). Type scene, shot and take, press `Enter`, and the next clip appears. The kit predicts the next take, warns about duplicates, and everything is undoable (`Ctrl Z`).
@@ -199,7 +214,7 @@ On a Mac, `Ctrl` is `Cmd`.
 | Anywhere | |
 |---|---|
 | `Ctrl K` | Jump to any shot, file or action |
-| `g` then `b` `r` `i` `c` `s` | Go to Board, Review, Ingest, Canvas, Settings |
+| `g` then `b` `r` `m` `i` `c` `s` | Go to Board, Review, Compare, Ingest, Canvas, Settings |
 | `?` | All shortcuts |
 
 | Review | | | |
@@ -211,6 +226,13 @@ On a Mac, `Ctrl` is `Cmd`.
 | `Enter` | add cut from in to out | `C` | compare with the next take |
 | `M` | marker | `T` | focus (hide side panels) |
 | `S` | send to canvas | `F` | full screen |
+
+| Compare | | | |
+|---|---|---|---|
+| `Space` | play, pause | `1` `2` `3` `4` | slider, side by side, fade, difference |
+| `←` `→` | one frame | `S` | swap sides |
+| `[` `]` | previous, next AI result | `{` `}` | previous, next take |
+| `F` | full screen | | |
 
 | Ingest | |
 |---|---|

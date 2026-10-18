@@ -18,7 +18,9 @@ Where the kit could go next. Nothing here is promised; it is a list of ideas, ro
 
 ## Review
 
-- **Compare with an overlay.** Wipe, difference and onion-skin between two takes, for matching performances and continuity.
+- **Overlay for two takes.** The Compare view already does slider, side by side, fade and difference between an original and its AI result. Offer the same between two *takes*, for matching performances and continuity.
+- **Compare more than two.** A grid of every AI version of a take playing together, with a pick-the-winner flow that sends the chosen version back to the canvas.
+- **Numbers behind the picture.** A difference heat-map and a score per AI version (how far it drifted from the original).
 - **Timecoded comments.** Notes tied to a moment, with initials, and a comment list you can walk through.
 - **Search the dialogue.** Local speech-to-text so you can find "the take where she says the line".
 - **Quality hints.** Flag likely soft focus, camera shake or a clipped slate, as hints only.

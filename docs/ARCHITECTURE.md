@@ -50,10 +50,18 @@ Uploads are `POST /user-assets`, a signed `PUT` (stall-guarded), a `HEAD` on the
 
 `CanvasClient` reads `LETZAI_API_BASE` at call time, so tests run the whole pipeline against `test/helpers/fake-letzai.js`, which can refuse, truncate, stall, rate-limit and drop nodes on demand.
 
+## Compare
+
+An AI result is a generated video mapped to a named take: `state.clips[key].ai = [{id, kind: 'file'|'url', path|url, label, note, originalStart, duration, width, height, fps}]`. The mapping lives with the take's metadata, so it follows renames and undo like ratings do. `ai.js` guesses the take from a file name (take name, scene/shot/take numbers, camera clip name) and the snippet number, which `planCuts` turns into `originalStart`.
+
+`Project.aiPlayback` mirrors `playback`: browser-safe files play as they are, others get a 720p proxy built in the background, links play remotely. `/ai-media` streams with Range, behind the same token guard as `/media`.
+
+The view (`ui/js/views/compare.js`) uses the AI clip as the master timeline and plays the original at `originalStart + t`, re-seeking it when it drifts (more than 0.2 s while playing, more than 0.02 s when paused). Slider and fade are CSS (a `clip-path` over stacked videos, or opacity); the difference mode is `mix-blend-mode: difference` with a brightness filter, so no pixels are processed in JavaScript.
+
 ## Security
 
 The server binds to `127.0.0.1`. A random token is generated per launch and exchanged for an `HttpOnly; SameSite=Strict` cookie; requests without it, or with another `Host`, are refused. Static files are confined to `ui/`. The API key is read from the environment or a user-only file and is never sent to the browser.
 
 ## Tests
 
-`npm test` runs pure-logic tests (names, shot list, coverage, canvas sort), project integration tests with ffmpeg-generated clips (scan, rename + undo, metadata follows renames, cuts, proxies), HTTP tests (token guard, Host check, Range, reports), canvas tests against the fake LetzAI (every failure path above, partial takes, retry, page per scene) and a UI test that parses every module and checks that every import resolves (the UI has no build step, so a missing export would blank the page). The real LetzAI API is checked by hand against a scratch canvas (see CONTRIBUTING).
+`npm test` runs pure-logic tests (names, shot list, coverage, canvas sort), project integration tests with ffmpeg-generated clips (scan, rename + undo, metadata follows renames, cuts, proxies), AI mapping tests (file-name matching, add, update, rename, missing file, Range streaming), HTTP tests (token guard, Host check, Range, reports), canvas tests against the fake LetzAI (every failure path above, partial takes, retry, page per scene) and a UI test that parses every module and checks that every import resolves (the UI has no build step, so a missing export would blank the page). The real LetzAI API is checked by hand against a scratch canvas (see CONTRIBUTING).

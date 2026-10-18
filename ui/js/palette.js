@@ -12,6 +12,8 @@ function actionList() {
     { label: 'Go to Canvas', icon: 'canvas', hay: 'canvas letzai send upload', run: go('canvas') },
     { label: 'Go to Settings', icon: 'settings', hay: 'settings setup folders ffmpeg', run: go('settings') },
     { label: 'Rename takes (change scene, shot or take numbers)', icon: 'pencil', hay: 'rename takes shot scene renumber change fix mislabeled wrong named', run: () => { window.kitGo('board'); S.filters.boardMode = 'clips'; setTimeout(() => document.querySelector('[data-mode=clips]')?.click(), 300); } },
+    { label: 'Compare original with AI result', icon: 'compare', hay: 'compare original ai result generated slider before after wipe', run: go('compare') },
+    { label: 'Add AI results (map generated videos to takes)', icon: 'plus', hay: 'add ai results generated videos map takes compare', run: () => import('./aiadd.js').then((m) => m.openAddAi({})) },
     { label: 'Name several clips at once', icon: 'slate', hay: 'name rename multiple several batch many clips ingest slate', run: () => { window.kitGo('ingest'); setTimeout(() => import('./views/ingest.js').then((m) => m.openBulkName()), 400); } },
     { label: 'Add a scene', icon: 'plus', hay: 'add new scene plan', run: () => import('./views/shotlist.js').then((m) => m.addSceneDialog()) },
     { label: 'Edit shot list', icon: 'list', hay: 'shot list plan edit scenes', run: () => import('./views/shotlist.js').then((m) => m.openShotList()) },

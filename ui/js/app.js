@@ -10,14 +10,16 @@ import { openRenameAll } from './renameall.js';
 import welcome from './views/welcome.js';
 import board from './views/board.js';
 import review from './views/review.js';
+import compare from './views/compare.js';
 import ingest from './views/ingest.js';
 import canvasView from './views/canvas.js';
 import settings from './views/settings.js';
 
-const VIEWS = { board, review, ingest, canvas: canvasView, settings };
+const VIEWS = { board, review, compare, ingest, canvas: canvasView, settings };
 const NAV = [
   { id: 'board', label: 'Board', icon: 'board', hint: 'What is shot, what is missing' },
   { id: 'review', label: 'Review', icon: 'review', hint: 'Watch takes, rate, circle, cut' },
+  { id: 'compare', label: 'Compare', icon: 'compare', hint: 'Original next to the AI version' },
   { id: 'ingest', label: 'Ingest', icon: 'slate', hint: 'Name raw clips from the slate' },
   { id: 'canvas', label: 'Canvas', icon: 'canvas', hint: 'Send takes to LetzAI Canvas' },
   { id: 'settings', label: 'Settings', icon: 'settings', hint: 'Project, folders, setup' },
@@ -68,9 +70,13 @@ function show() {
     if (current.args === argsSig) { if (next.update) next.update(); return; }
   }
   if (current.mod && current.mod.unmount) current.mod.unmount();
-  mount($main, '');
+  // A new container per visit: handlers a view attaches to it go away with it. (They used to be attached to one shared
+  // element and multiplied every time a view was opened again.)
+  const host = document.createElement('div');
+  host.className = `view-host${next.flush ? ' flush' : ''}`;
+  $main.replaceChildren(host);
   current = { mod: next, view: viewSig, args: argsSig };
-  next.mount($main, S.route.args);
+  next.mount(host, S.route.args);
   $main.focus({ preventScroll: true });
 }
 
@@ -99,9 +105,9 @@ function renderRail() {
   const counts = { ingest: raw || '', board: t && t.missing ? t.missing : '' };
   mount($rail, html`
     <div class="rail-label">Film</div>
-    ${NAV.slice(0, 4).map((n) => html`<a class="rail-item" href="#/${n.id}" ${S.route.view === n.id ? 'aria-current="page"' : ''} title="${n.hint}">${icon(n.icon)}<span>${n.label}</span>${counts[n.id] ? html`<span class="count" title="${n.id === 'ingest' ? 'unnamed clips' : 'shots missing'}">${counts[n.id]}</span>` : ''}</a>`)}
+    ${NAV.slice(0, 5).map((n) => html`<a class="rail-item" href="#/${n.id}" ${S.route.view === n.id ? 'aria-current="page"' : ''} title="${n.hint}">${icon(n.icon)}<span>${n.label}</span>${counts[n.id] ? html`<span class="count" title="${n.id === 'ingest' ? 'unnamed clips' : 'shots missing'}">${counts[n.id]}</span>` : ''}</a>`)}
     <div class="rail-label">Project</div>
-    ${NAV.slice(4).map((n) => html`<a class="rail-item" href="#/${n.id}" ${S.route.view === n.id ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></a>`)}
+    ${NAV.slice(5).map((n) => html`<a class="rail-item" href="#/${n.id}" ${S.route.view === n.id ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></a>`)}
     <div class="rail-foot">
       ${S.info.ffmpeg.ok ? '' : html`<a href="#/settings" class="app-chip app-chip--warning">${icon('warn', 12)} ffmpeg missing</a>`}
       ${S.info.key.set ? '' : html`<a href="#/canvas" class="faint">${icon('key', 12)} No LetzAI key yet</a>`}
@@ -150,7 +156,7 @@ export async function rescan() {
 
 function openShortcuts() {
   const rows = [
-    ['Global', [['Ctrl K', 'Jump to a shot or action'], ['g then b / r / i / c / s', 'Go to Board / Review / Ingest / Canvas / Settings'], ['?', 'This list']]],
+    ['Global', [['Ctrl K', 'Jump to a shot or action'], ['g then b / r / m / i / c / s', 'Go to Board / Review / Compare / Ingest / Canvas / Settings'], ['?', 'This list']]],
     ['Review', [['Space or K', 'Play / pause'], ['J / L', 'Slower / faster (press again to speed up)'], ['← / →', 'Step one frame (Shift: one second)'], ['I / O', 'Set cut in / out point'], ['Enter', 'Add cut from in to out'], ['M', 'Drop a marker'], ['1 2 3', 'Rate: void / ok / good'], ['P', 'Print (circle) this take'], ['[ / ]', 'Previous / next take'], ['Shift [ / ]', 'Previous / next shot'], ['C', 'Compare with the next take'], ['T', 'Focus: hide the side panels'], ['S', 'Send this take to the canvas']]],
     ['Ingest', [['Enter', 'Apply the name and go to the next clip'], ['Tab', 'Move between scene, shot, take'], ['Esc', 'Skip this clip'], ['Ctrl Z', 'Undo the last rename']]],
   ];
@@ -171,7 +177,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '?') { e.preventDefault(); openShortcuts(); return; }
   if (!(S.info && S.info.project)) return;
   if (chord) {
-    const map = { b: 'board', r: 'review', i: 'ingest', c: 'canvas', s: 'settings' };
+    const map = { b: 'board', r: 'review', m: 'compare', i: 'ingest', c: 'canvas', s: 'settings' };
     const dest = map[e.key.toLowerCase()];
     chord = null;
     if (dest) { e.preventDefault(); go(dest); }

@@ -6,6 +6,7 @@ import { S, clip, clips, scenes, findShot, takesOf, subscribeJobs, inFolder, set
 import { toast, toastError, openMenu } from '../ui.js';
 import { folderButton, wireFolderControls } from '../folderpick.js';
 import { openRenameTakes, takesOfShot, takesOfScene } from '../renametakes.js';
+import { openAddAi } from '../aiadd.js';
 
 const ls = {
   get(k, d) { try { const v = localStorage.getItem(`review.${k}`); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -157,7 +158,7 @@ function renderStrip() {
   mount(el, html`${takes.map((t) => html`
     <button class="take ${t.key === key ? 'active' : ''} ${t.key === compareKey ? 'cmp' : ''}" data-take="${t.key}" title="${t.name}">
       <span class="take-img"><img loading="lazy" alt="" src="${posterUrl(t)}" onerror="this.style.visibility='hidden'"></span>
-      <span class="take-top">${t.rating ? html`<span class="app-chip on-media xs">${icon(RATING[t.rating].icon, 12)}</span>` : ''}${glyphFor(t)}</span>
+      <span class="take-top">${t.rating ? html`<span class="app-chip on-media xs">${icon(RATING[t.rating].icon, 12)}</span>` : ''}${t.ai && t.ai.length ? html`<span class="app-chip on-media xs" title="${t.ai.length} AI result${t.ai.length === 1 ? '' : 's'} mapped">AI</span>` : ''}${glyphFor(t)}</span>
       ${t.key === compareKey ? html`<span class="take-b">B</span>` : t.key === key && compareKey ? html`<span class="take-b">A</span>` : ''}
       <span class="take-bot"><b class="tnum">${t.kind === 'shot' ? `T${t.take}` : 'Clip'}</b><span class="tnum">${fmtDur(t.duration)}</span></span>
       ${hasManyFolders() ? html`<span class="take-folder" title="${t.dir}">${folderLabel(t.dir)}</span>` : ''}
@@ -234,6 +235,12 @@ function renderInspector() {
       <div class="faint" style="font-size:12px;margin-top:8px">${plan.length ? `${plural(plan.length, 'snippet')}${c.cutRanges.length ? '' : ' (whole take)'}: ${plan.map((l) => `${Math.round(l)} s`).join(', ')}. Snippets are at most ${S.info.project.snippets.maxSeconds} s.` : 'Waiting for the clip length…'}</div>
       ${c.marks.length ? html`<div class="insp-label" style="margin-top:14px">Markers</div><div class="marks">${c.marks.map((m) => html`<div class="cut-row"><button class="link-btn tnum" data-seek="${m.t}">${fmtTc(m.t, fps(c))}</button><span class="grow faint">${m.label || ''}</span><button class="app-icon-btn app-icon-btn--sm" data-del-mark="${m.id}">${icon('close', 14)}</button></div>`)}</div>` : ''}
     </div>
+
+    ${c.kind === 'shot' ? html`<div class="insp-sec">
+      <div class="insp-label">AI versions</div>
+      ${c.ai && c.ai.length ? html`<div class="ai-list">${c.ai.map((a) => html`<button class="ai-item" data-compare-ai="${a.id}" title="Compare with the original">${icon('compare', 14)}<span class="grow ellipsis">${a.label}</span><span class="faint tnum">${fmtDur(a.duration)}</span></button>`)}</div>` : html`<div class="faint" style="font-size:12px;margin-bottom:8px">Map a generated video to this take to compare them with a slider.</div>`}
+      <button class="app-btn app-btn--sm" id="aiAdd" style="margin-top:8px">${icon('plus', 14)}<span>Add AI result…</span></button>
+    </div>` : ''}
 
     ${c.kind === 'shot' ? html`<div class="insp-sec">
       <div class="insp-label">Canvas</div>
@@ -549,6 +556,8 @@ function bindPlayer() {
   scrub.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') stepFrame(-1, e.shiftKey); if (e.key === 'ArrowRight') stepFrame(1, e.shiftKey); });
 
   wireFolderControls(root, on);
+  on(root, 'click', '#aiAdd', () => openAddAi({ key }));
+  on(root, 'click', '[data-compare-ai]', (e, b) => window.kitGo('compare', key, b.dataset.compareAi));
   on(root, 'click', '#bPlay', togglePlay);
   on(root, 'click', '#bBack', () => stepFrame(-1));
   on(root, 'click', '#bFwd', () => stepFrame(1));

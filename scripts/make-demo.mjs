@@ -101,6 +101,33 @@ meta('DemoFilm-scene1-shot3-take3.mp4', { rating: 'ok', note: 'Focus pulls late.
 meta('DemoFilm-scene2-shot1-take1.mp4', { rating: 'good', print: true });
 meta('DemoFilm-scene3-shot2-take2.mp4', { rating: 'good' });
 
+// "AI versions" of two takes, so Compare has something to show: the same picture, restyled. They are cut from the
+// original after the slate, so they start 1.2 s into the take.
+const aiDir = path.join(dir, 'ai-results');
+fs.mkdirSync(aiDir, { recursive: true });
+function restyle(srcName, outName, vf, label) {
+  const src = path.join(footage, dayOf(Number(/scene(\d+)-/.exec(srcName)[1])), srcName);
+  const out = path.join(aiDir, outName);
+  if (!fs.existsSync(out)) {
+    const r = spawnSync(ff.ffmpeg, ['-v', 'error', '-y', '-ss', '1.2', '-i', src, '-t', '3', '-vf', `${vf},${text(label, 40, 640, 34, 'white')}`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-an', out], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`ffmpeg failed for ${outName}: ${r.stderr}`);
+  }
+  return out;
+}
+const aiResults = {
+  'DemoFilm-scene1-shot1-take2.mp4': [
+    { file: restyle('DemoFilm-scene1-shot1-take2.mp4', 'scene1-shot1-take2_ai-v1.mp4', 'eq=contrast=1.25:saturation=1.9,hue=h=-18,noise=alls=10:allf=t', 'AI v1  warm grade'), label: 'Warm film look', note: 'Skin tones hold up. The window blows out a little.' },
+    { file: restyle('DemoFilm-scene1-shot1-take2.mp4', 'scene1-shot1-take2_ai-v2.mp4', 'hue=s=0.15,eq=contrast=1.35:brightness=-0.04,noise=alls=6:allf=t', 'AI v2  desaturated'), label: 'Cold and desaturated', note: '' },
+  ],
+  'DemoFilm-scene1-shot3-take3.mp4': [
+    { file: restyle('DemoFilm-scene1-shot3-take3.mp4', 'scene1-shot3-take3_ai-v1.mp4', 'curves=preset=vintage,eq=saturation=1.4', 'AI v1  vintage'), label: 'Vintage', note: '' },
+  ],
+};
+for (const [take, list] of Object.entries(aiResults)) {
+  const c = (clips[rel(take)] = clips[rel(take)] || {});
+  c.ai = list.map((a, i) => ({ id: `demoai${Object.keys(clips).length}${i}`, kind: 'file', path: a.file, label: a.label, duration: 3, width: 1280, height: 720, fps: 25, originalStart: 1.2, note: a.note, addedAt: new Date().toISOString() }));
+}
+
 const project = {
   version: 1,
   name: 'Demo film',

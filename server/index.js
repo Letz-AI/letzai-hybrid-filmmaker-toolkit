@@ -165,6 +165,13 @@ function createServer({ token, port, app: injected }) {
       return { job: app.jobs.add({ lane: 'misc', title: 'Copy selects', detail: dest, run: (ctx) => p.copySelects(dest, ctx) }).id };
     },
 
+    'POST /api/ai/add': async ({ body }) => ({ added: await app.requireProject().addAi(body.key, body.items) }),
+    'POST /api/ai/update': async ({ body }) => ({ ai: app.requireProject().updateAi(body.key, body.id, body.patch || {}) }),
+    'POST /api/ai/remove': async ({ body }) => { app.requireProject().removeAi(body.key, body.id); return { ok: true }; },
+    'POST /api/ai/suggest': async ({ body }) => ({ suggestions: app.requireProject().suggestAi(body.names) }),
+    'GET /api/ai/playback': async ({ url }) => app.requireProject().aiPlayback(url.searchParams.get('key'), url.searchParams.get('id'), { hevc: url.searchParams.get('hevc') === '1' }),
+    'GET /api/canvas/media': async () => ({ media: await app.canvasMedia().catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); }) }),
+    'POST /api/pick-files': async ({ body }) => ({ paths: await pickFiles(body.title || 'Choose videos', body.start) }),
     'POST /api/pick-folder': async ({ body }) => ({ path: await pickFolder(body.title || 'Choose a folder', body.start) }),
     'GET /api/browse': async ({ url }) => browse(url.searchParams.get('dir')),
     'POST /api/reveal': async ({ body }) => {
@@ -199,6 +206,12 @@ function createServer({ token, port, app: injected }) {
         const p = app.requireProject();
         const e = p.entry(url.searchParams.get('key'));
         const file = p.mediaPath(e, url.searchParams.get('src'));
+        if (!fs.existsSync(file)) throw httpError(404, 'Media not found');
+        return serveFile(req, res, file, 'video/mp4');
+      }
+      if (url.pathname === '/ai-media') {
+        const p = app.requireProject();
+        const file = p.aiMediaPath(url.searchParams.get('key'), url.searchParams.get('id'), url.searchParams.get('src'));
         if (!fs.existsSync(file)) throw httpError(404, 'Media not found');
         return serveFile(req, res, file, 'video/mp4');
       }
@@ -259,6 +272,29 @@ function pickFolder(title, start) {
     p.stdout.on('data', (d) => { out += d; });
     p.on('error', () => reject(httpError(501, 'No native folder dialog is available here. Type the path instead.')));
     p.on('close', () => resolve(out.trim().replace(/\/$/, '') || null));
+  });
+}
+
+/** A native "choose files" dialog. Returns the chosen paths (empty when cancelled). */
+function pickFiles(title, start) {
+  return new Promise((resolve, reject) => {
+    let cmd; let args;
+    if (process.platform === 'win32') {
+      const ps = "Add-Type -AssemblyName System.Windows.Forms; $o = New-Object System.Windows.Forms.Form; $o.TopMost = $true; $o.ShowInTaskbar = $false; $o.Opacity = 0; $o.StartPosition = 'CenterScreen'; $o.Show(); $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Title = $env:KIT_TITLE; $f.Multiselect = $true; $f.Filter = 'Video files|*.mp4;*.mov;*.m4v;*.mkv;*.webm;*.avi|All files|*.*'; if ($env:KIT_START -and (Test-Path -LiteralPath $env:KIT_START)) { $f.InitialDirectory = $env:KIT_START }; if ($f.ShowDialog($o) -eq 'OK') { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $f.FileNames | ForEach-Object { Write-Output $_ } }; $o.Close()";
+      cmd = 'powershell.exe'; args = ['-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-Command', ps];
+    } else if (process.platform === 'darwin') {
+      cmd = 'osascript';
+      args = ['-e', `set fs to choose file with prompt "${title.replace(/"/g, '')}" with multiple selections allowed`, '-e', 'set out to ""', '-e', 'repeat with f in fs', '-e', 'set out to out & POSIX path of f & linefeed', '-e', 'end repeat', '-e', 'return out'];
+    } else if (hasCommand('zenity')) {
+      cmd = 'zenity'; args = ['--file-selection', '--multiple', '--separator=\n', `--title=${title}`];
+    } else {
+      cmd = 'kdialog'; args = ['--getopenfilename', start || os.homedir(), 'Video (*.mp4 *.mov *.m4v *.mkv *.webm *.avi)', '--multiple', '--separate-output', '--title', title];
+    }
+    const p = spawn(cmd, args, { env: { ...process.env, KIT_TITLE: title, KIT_START: start || '' }, windowsHide: true });
+    let out = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.on('error', () => reject(httpError(501, 'No native file dialog is available here. Paste the file path instead.')));
+    p.on('close', () => resolve(out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)));
   });
 }
 

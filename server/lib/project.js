@@ -21,6 +21,7 @@ function renderOnce(out, fn) {
   return inflight.get(out);
 }
 const { DEFAULT_LAYOUT } = require('./canvas');
+const { suggestTake } = require('./ai');
 
 const FILE_NAME = 'letzai-kit.json';
 const SCHEMA = 1;
@@ -101,7 +102,7 @@ class Project extends EventEmitter {
     clearTimeout(this._saveTimer);
     // Drop empty metadata so the file stays small.
     for (const [k, m] of Object.entries(this.state.clips)) {
-      const keep = m.rating || m.print || m.note || m.skip || (m.tags && m.tags.length) || (m.marks && m.marks.length) || (m.cuts && m.cuts.length) || m.orig;
+      const keep = m.rating || m.print || m.note || m.skip || (m.tags && m.tags.length) || (m.marks && m.marks.length) || (m.cuts && m.cuts.length) || (m.ai && m.ai.length) || m.orig;
       if (!keep) delete this.state.clips[k];
     }
     this.state.history = this.state.history.slice(0, 100);
@@ -196,6 +197,8 @@ class Project extends EventEmitter {
         e.tags = m.tags || [];
         e.marks = m.marks || [];
         e.cutRanges = m.cuts || [];
+        // generated versions of this take (files on disk or links to the canvas)
+        e.ai = (m.ai || []).map((a) => ({ ...a, name: a.kind === 'file' ? path.basename(a.path) : a.label, missing: a.kind === 'file' && !fs.existsSync(a.path) }));
         e.orig =m.orig || (e.kind === 'raw' ? e.name : '');
         e.probe = probe && !probe.error ? probe : null;
         e.duration = e.probe ? e.probe.duration : 0;
@@ -856,6 +859,118 @@ class Project extends EventEmitter {
     walk(this.root, 0);
     // also siblings of existing footage folders (Day 1 and Day 2 side by side)
     return found.sort((a, b) => natCompare(a.name, b.name));
+  }
+
+  // ---- AI results: the generated versions of a take, for the Compare view ---------------------
+
+  /**
+   * Map generated videos to the take they came from.
+   * items: [{ path | url, label?, originalStart?, cut?, nodeId? }]. A result is usually made from a piece of the take,
+   * so originalStart says where in the original it begins; `cut` (the snippet number) works that out.
+   */
+  async addAi(key, items) {
+    const e = this.entry(key);
+    if (e.kind !== 'shot') throw httpError(400, 'Name this clip first, then map AI results to it.');
+    if (!Array.isArray(items) || !items.length) throw httpError(400, 'Choose at least one video.');
+    const m = this.state.clips[key] || (this.state.clips[key] = { sig: e.sig });
+    m.sig = e.sig;
+    m.ai = m.ai || [];
+    const plan = this.planCuts(e);
+    const added = [];
+    for (const it of items) {
+      let rec;
+      if (it.path) {
+        const abs = path.resolve(String(it.path));
+        if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) throw httpError(404, `That file is not there: ${abs}`);
+        if (!isVideoFile(abs)) throw httpError(400, `${path.basename(abs)} is not a video file.`);
+        const info = await this.probeFile(abs);
+        rec = { kind: 'file', path: abs, label: String(it.label || path.basename(abs).replace(/\.[^.]+$/, '')).slice(0, 80), duration: info.error ? 0 : info.duration, width: info.error ? 0 : info.width, height: info.error ? 0 : info.height, fps: info.error ? 0 : info.fps };
+      } else if (it.url) {
+        if (!/^https:\/\//i.test(String(it.url))) throw httpError(400, 'Links must start with https://');
+        rec = { kind: 'url', url: String(it.url), nodeId: String(it.nodeId || ''), label: String(it.label || 'AI result').slice(0, 80), duration: Number(it.duration) || 0, width: Number(it.width) || 0, height: Number(it.height) || 0 };
+      } else throw httpError(400, 'Each result needs a file or a link.');
+      const cut = parseInt(it.cut, 10);
+      const start = it.originalStart != null ? Number(it.originalStart) : (cut >= 1 && plan[cut - 1] ? plan[cut - 1].start : 0);
+      rec.id = hash(Math.random() + rec.label);
+      rec.originalStart = Math.max(0, Number.isFinite(start) ? start : 0);
+      rec.note = '';
+      rec.addedAt = new Date().toISOString();
+      m.ai.push(rec);
+      added.push(rec.id);
+    }
+    this.scheduleSave();
+    await this.scan();
+    return added;
+  }
+
+  updateAi(key, id, patch) {
+    this.entry(key);
+    const m = this.state.clips[key];
+    const a = m && (m.ai || []).find((x) => x.id === id);
+    if (!a) throw httpError(404, 'That AI result is not mapped to this take.');
+    if ('label' in patch) a.label = String(patch.label || '').slice(0, 80) || a.label;
+    if ('note' in patch) a.note = String(patch.note || '').slice(0, 1000);
+    if ('originalStart' in patch) a.originalStart = Math.max(0, Number(patch.originalStart) || 0);
+    if ('duration' in patch && Number(patch.duration) > 0) a.duration = Number(patch.duration);
+    this.scheduleSave();
+    const e = this.byKey.get(key);
+    if (e) e.ai = (m.ai || []).map((x) => ({ ...x, name: x.kind === 'file' ? path.basename(x.path) : x.label, missing: x.kind === 'file' && !fs.existsSync(x.path) }));
+    this.emit('library');
+    return a;
+  }
+
+  removeAi(key, id) {
+    this.entry(key);
+    const m = this.state.clips[key];
+    if (!m || !(m.ai || []).some((x) => x.id === id)) throw httpError(404, 'That AI result is not mapped to this take.');
+    m.ai = m.ai.filter((x) => x.id !== id);
+    if (!m.ai.length) delete m.ai;
+    this.scheduleSave();
+    const e = this.byKey.get(key);
+    if (e) e.ai = (m.ai || []).map((x) => ({ ...x, name: x.kind === 'file' ? path.basename(x.path) : x.label, missing: x.kind === 'file' && !fs.existsSync(x.path) }));
+    this.emit('library');
+  }
+
+  /** For a list of file names: the take each probably belongs to (null when unknown), and which snippet it is. */
+  suggestAi(names) {
+    const takes = this.library.filter((e) => e.kind === 'shot');
+    return (names || []).map((name) => {
+      const hit = suggestTake(String(name), takes);
+      if (!hit) return { name, key: null };
+      const e = this.byKey.get(hit.key);
+      const plan = this.planCuts(e);
+      return { name, key: hit.key, why: hit.why, cut: hit.cut, originalStart: hit.cut && plan[hit.cut - 1] ? plan[hit.cut - 1].start : 0 };
+    });
+  }
+
+  /** What the browser should play for an AI result: the file, a small copy of it, or its link. */
+  async aiPlayback(key, id, { hevc } = {}) {
+    this.entry(key);
+    const m = this.state.clips[key];
+    const a = m && (m.ai || []).find((x) => x.id === id);
+    if (!a) throw httpError(404, 'That AI result is not mapped to this take.');
+    if (a.kind === 'url') return { kind: 'remote', url: a.url };
+    if (!fs.existsSync(a.path)) throw httpError(404, `The file is missing: ${a.path}. Move it back, or remove this result and add it again.`, { code: 'missing' });
+    const st = fs.statSync(a.path);
+    const sig = `${st.size}-${Math.round(st.mtimeMs)}`;
+    const info = await this.probeFile(a.path);
+    const urlFor = (src) => `/ai-media?key=${encodeURIComponent(key)}&id=${id}&src=${src}&v=${sig}`;
+    if (info.error || (ff.browserSafe(info, a.path) && info.height <= 2160) || (hevc && info.codec === 'hevc')) return { kind: 'original', url: urlFor('orig') };
+    const pseudo = { abs: a.path, sig, name: path.basename(a.path), duration: info.duration, probe: info, key: `ai:${id}` };
+    if (fs.existsSync(this.proxyPath(pseudo))) return { kind: 'generated-proxy', url: urlFor('gen') };
+    const job = this.ensureProxy(pseudo);
+    return { kind: 'pending', jobId: job.id, pending: true };
+  }
+
+  aiMediaPath(key, id, src) {
+    const m = this.state.clips[key];
+    const a = m && (m.ai || []).find((x) => x.id === id);
+    if (!a || a.kind !== 'file') throw httpError(404, 'Media not found');
+    if (src === 'gen') {
+      const st = fs.statSync(a.path);
+      return this.proxyPath({ sig: `${st.size}-${Math.round(st.mtimeMs)}` });
+    }
+    return a.path;
   }
 
   // ---- shot list ----------------------------------------------------------------------
