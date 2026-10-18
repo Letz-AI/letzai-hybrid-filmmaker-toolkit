@@ -13,6 +13,8 @@ export async function api(method, url, body) {
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { error: text }; }
+  // the pages are read from disk on every load, but a server started before an update does not know the new routes
+  if (res.status === 404 && data && data.error === 'Unknown endpoint') throw new ApiError('This window is connected to an older copy of the kit that is still running. Close the kit (and its black console window), then start it again.', 404, { code: 'stale-server' });
   if (!res.ok) throw new ApiError((data && data.error) || `Request failed (${res.status})`, res.status, data);
   return data;
 }

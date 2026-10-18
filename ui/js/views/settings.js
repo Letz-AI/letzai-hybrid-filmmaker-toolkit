@@ -14,6 +14,7 @@ let proxy = null;
 let vis = null;     // Claude / Anthropic settings from the server
 let visBusy = '';
 let visMsg = null;  // { ok, text }
+let visError = ''; // why the Claude settings could not be loaded
 
 const proj = () => S.info.project;
 const theme = () => { try { return localStorage.getItem('theme') || 'dark'; } catch { return 'dark'; } };
@@ -56,7 +57,7 @@ function draw() {
 
     <div class="section-label">Claude: reading slates</div>
     <div class="surface pad form-grid">
-      ${vis ? html`
+      ${visError ? html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow"><b>The Claude settings could not be loaded</b>${visError}</div></div>` : vis ? html`
         <div class="muted">Add your own Anthropic API key and Claude can read the slate on each clip and suggest its scene, shot and take, for unnamed clips (Ingest) and to double-check named ones (Review, Board). Nothing is renamed without your confirmation.</div>
         <div class="app-field"><label for="sVisKey">Anthropic API key</label>
           ${vis.key.set ? html`<div class="row" style="gap:8px"><span class="app-chip app-chip--success">${icon('checkCircle', 14)}Saved ${vis.key.source === 'environment' ? 'in the ANTHROPIC_API_KEY environment variable' : 'on this computer'}</span><span class="grow"></span>${vis.key.source === 'file' ? html`<button class="app-btn app-btn--sm" id="visRemove">${icon('trash', 14)}<span>Remove key</span></button>` : ''}<button class="app-btn app-btn--sm" id="visTest">${visBusy === 'test' ? 'Testing…' : 'Test it'}</button></div>`
@@ -110,7 +111,7 @@ export default {
     draw();
     get('/api/doctor').then((d) => { doctor = d; draw(); }).catch(() => {});
     get('/api/proxy-status').then((r) => { proxy = r; draw(); }).catch(() => {});
-    get('/api/vision').then((r) => { vis = r; draw(); }).catch(() => {});
+    get('/api/vision').then((r) => { vis = r; visError = ''; draw(); }).catch((e) => { visError = e.message; draw(); });
     const look = () => get('/api/folders/discover').then((r) => { found = r.folders; draw(); }).catch(() => {});
     look();
     on(el, 'click', '[data-add-found]', async (e, b) => { b.disabled = true; await save({ folders: [...proj().folders, b.dataset.addFound] }); look(); });
