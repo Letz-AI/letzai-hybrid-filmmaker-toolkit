@@ -435,6 +435,19 @@ class Project extends EventEmitter {
     return { key: newKey, name: plan.name, take, history: entry.id };
   }
 
+  /**
+   * Move the project's notes about clips (ratings, cuts, AI mappings, slate readings...) to new keys. All of them are
+   * taken out first and put back second, so swaps and chains ("take 2 becomes 3, take 3 becomes 2") cannot overwrite
+   * each other. Returns the moves that were applied, for the undo record.
+   */
+  _moveMetas(list) {
+    const moving = list.filter((m) => m.from !== m.to && this.state.clips[m.from]);
+    const taken = moving.map((m) => ({ ...m, data: this.state.clips[m.from] }));
+    for (const m of taken) delete this.state.clips[m.from];
+    for (const m of taken) this.state.clips[m.to] = m.data;
+    return taken.map(({ from, to }) => ({ from, to }));
+  }
+
   async undo() {
     const h = this.state.history[0];
     if (!h) throw httpError(404, 'Nothing to undo.');
@@ -443,9 +456,7 @@ class Project extends EventEmitter {
     const pairs = h.moves.map((mv) => ({ from: this.absOf(mv.to), to: this.absOf(mv.from) })).filter((p) => fs.existsSync(p.from));
     await this._moveAll(pairs, { skipIfTargetBusy: true });
     this.state.history.shift(); // only now: if the files were busy, undo can be tried again
-    for (const m of (h.metas || (h.meta ? [h.meta] : [])).slice().reverse()) {
-      if (this.state.clips[m.to]) { this.state.clips[m.from] = this.state.clips[m.to]; delete this.state.clips[m.to]; }
-    }
+    this._moveMetas((h.metas || (h.meta ? [h.meta] : [])).map((m) => ({ from: m.to, to: m.from })));
     this.scheduleSave();
     await this.scan();
     return { undone: h.label };
@@ -576,11 +587,7 @@ class Project extends EventEmitter {
     }
     const pairs = ok.flatMap((it) => it.moves.map((m) => ({ from: m.from, to: m.to })));
     await this._moveAll(pairs);
-    const metas = [];
-    for (const it of ok) {
-      const newKey = this.keyOf(it.moves[0].to);
-      if (newKey !== it.key && this.state.clips[it.key]) { this.state.clips[newKey] = this.state.clips[it.key]; delete this.state.clips[it.key]; metas.push({ from: it.key, to: newKey }); }
-    }
+    const metas = this._moveMetas(ok.map((it) => ({ from: it.key, to: this.keyOf(it.moves[0].to) })));
     const entry = {
       id: hash(Math.random()), at: new Date().toISOString(), label: `Named ${ok.length} clip${ok.length === 1 ? '' : 's'}`,
       moves: pairs.map((m) => ({ from: this.keyOf(m.from), to: this.keyOf(m.to) })), metas,
@@ -618,11 +625,7 @@ class Project extends EventEmitter {
     }
     const pairs = plan.items.flatMap((it) => it.moves.map((m) => ({ from: m.from, to: m.to })));
     await this._moveAll(pairs);
-    const metas = [];
-    for (const it of plan.items) {
-      const newKey = this.keyOf(it.moves[0].to);
-      if (newKey !== it.key && this.state.clips[it.key]) { this.state.clips[newKey] = this.state.clips[it.key]; delete this.state.clips[it.key]; metas.push({ from: it.key, to: newKey }); }
-    }
+    const metas = this._moveMetas(plan.items.map((it) => ({ from: it.key, to: this.keyOf(it.moves[0].to) })));
     const entry = {
       id: hash(Math.random()), at: new Date().toISOString(), label: `Renamed ${plan.items.length} take${plan.items.length === 1 ? '' : 's'} to the current naming scheme`,
       moves: pairs.map((m) => ({ from: this.keyOf(m.from), to: this.keyOf(m.to) })), metas,

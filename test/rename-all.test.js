@@ -195,3 +195,27 @@ test('a file that is briefly locked is retried, and one that stays locked fails 
 });
 
 test.after(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+test('swapping or chaining take numbers keeps every take\'s notes with its own file, and undo restores them', async () => {
+  const { p, film } = await setup(['Old-scene1-shot1-take1.mp4', 'Old-scene1-shot1-take2.mp4', 'Old-scene1-shot1-take3.mp4']);
+  const byName = (n) => p.library.find((e) => e.name === n);
+  for (const [n, note] of [['Old-scene1-shot1-take1.mp4', 'one'], ['Old-scene1-shot1-take2.mp4', 'two'], ['Old-scene1-shot1-take3.mp4', 'three']]) await p.setMeta(byName(n).key, { note, rating: note === 'two' ? 'good' : 'ok' });
+  const noteOf = (n) => (byName(n) || {}).note;
+
+  // swap take 2 and take 3
+  const swap = await p.renameMany([{ key: byName('Old-scene1-shot1-take2.mp4').key, scene: '1', shot: '1', take: 3 }, { key: byName('Old-scene1-shot1-take3.mp4').key, scene: '1', shot: '1', take: 2 }], { apply: true });
+  assert.equal(swap.renamed, 2);
+  assert.deepEqual([noteOf('Old-scene1-shot1-take1.mp4'), noteOf('Old-scene1-shot1-take2.mp4'), noteOf('Old-scene1-shot1-take3.mp4')], ['one', 'three', 'two']);
+  assert.equal(byName('Old-scene1-shot1-take3.mp4').rating, 'good');
+  await p.undo();
+  assert.deepEqual([noteOf('Old-scene1-shot1-take1.mp4'), noteOf('Old-scene1-shot1-take2.mp4'), noteOf('Old-scene1-shot1-take3.mp4')], ['one', 'two', 'three']);
+
+  // chain: 1 becomes 2, 2 becomes 3, 3 becomes 4
+  const chain = await p.renameMany([1, 2, 3].map((t) => ({ key: byName(`Old-scene1-shot1-take${t}.mp4`).key, scene: '1', shot: '1', take: t + 1 })), { apply: true });
+  assert.equal(chain.renamed, 3);
+  assert.deepEqual([2, 3, 4].map((t) => noteOf(`Old-scene1-shot1-take${t}.mp4`)), ['one', 'two', 'three']);
+  assert.equal(byName('Old-scene1-shot1-take1.mp4'), undefined);
+  await p.undo();
+  assert.deepEqual([1, 2, 3].map((t) => noteOf(`Old-scene1-shot1-take${t}.mp4`)), ['one', 'two', 'three']);
+  assert.deepEqual(names(film).filter((n) => n.endsWith('.mp4')), ['Old-scene1-shot1-take1.mp4', 'Old-scene1-shot1-take2.mp4', 'Old-scene1-shot1-take3.mp4']);
+});

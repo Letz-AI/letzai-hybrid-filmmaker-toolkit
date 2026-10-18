@@ -34,7 +34,8 @@ function view(project, e) {
   if (r.confidence < 0.7) out.flags.push('low');
   if (out.status === 'match') return out;
   const others = project.library.filter((x) => x.key !== e.key);
-  if (others.some((x) => x.kind === 'shot' && x.extra.length === 0 && same(x, r))) out.flags.push('taken');
+  // taken by a take that stays as it is; a take that Claude read differently is probably about to move away, so it is not in the way
+  if (others.some((x) => x.kind === 'shot' && x.extra.length === 0 && same(x, r) && !(x.slate && x.slate.scene && x.slate.shot && x.slate.take && !same(x, x.slate)))) out.flags.push('taken');
   // two unnamed clips read as the same take
   if (others.some((x) => x.slate && x.kind !== 'shot' && x.slate.scene === r.scene && x.slate.shot === r.shot && x.slate.take === r.take)) out.flags.push('twice');
   const plan = project.state.shotList || [];

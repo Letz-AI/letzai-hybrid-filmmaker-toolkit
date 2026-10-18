@@ -152,10 +152,12 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
         ${!rows.length ? html`<div class="faint">Nothing to show.</div>` : ''}
       </div>`);
       const n = [...state.values()].filter((s) => s.on).length;
-      mount(p.foot, html`${todo.length ? html`<button class="app-btn app-btn--sm" id="slTick">Tick the confident ones</button>` : ''}<span class="grow"></span><button class="app-btn" data-no>Close</button>${todo.length ? html`<button class="app-btn app-btn--primary" id="slApply" ${n ? '' : 'disabled'}>${n ? `Rename ${plural(n, 'clip')}` : 'Tick what to rename'}</button>` : ''}`);
+      mount(p.foot, html`${todo.length ? html`<button class="app-btn app-btn--sm" id="slTick">Tick the confident ones</button><button class="app-btn app-btn--sm" id="slTickAll" title="Tick every row, including ones Claude is unsure about or that are flagged">Tick all ${todo.length}</button>` : ''}<span class="grow"></span><button class="app-btn" data-no>Close</button>${todo.length ? html`<button class="app-btn app-btn--primary" id="slApply" ${n ? '' : 'disabled'}>${n ? `Rename ${plural(n, 'clip')}` : 'Tick what to rename'}</button>` : ''}`);
       p.foot.querySelector('[data-no]').addEventListener('click', p.close);
       const apply = p.foot.querySelector('#slApply');
       if (apply) apply.addEventListener('click', doApply);
+      const tickAll = p.foot.querySelector('#slTickAll');
+      if (tickAll) tickAll.addEventListener('click', () => { for (const r of todo) state.get(r.k).on = true; draw(); });
       const tick = p.foot.querySelector('#slTick');
       if (tick) tick.addEventListener('click', () => { for (const r of todo) state.get(r.k).on = confident(r.s); draw(); });
     };

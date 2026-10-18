@@ -1,7 +1,7 @@
 // The Board: the plan laid over what was shot. Which shots are covered, which are missing, which need a decision.
 import { html, icon, mount, on, $, $$, fmtDur, fmtClock, fmtDay, plural, clamp, debounce } from '../lib.js';
 import { get, post, patch } from '../api.js';
-import { S, scenes, totals, clips, allClips, takesOf, clip, folders, folderLabel, hasManyFolders, setFolderFilter, loadInfo, failedSends } from '../store.js';
+import { S, inFolder, scenes, totals, clips, allClips, takesOf, clip, folders, folderLabel, hasManyFolders, setFolderFilter, loadInfo, failedSends } from '../store.js';
 import { toast, toastError, openMenu } from '../ui.js';
 import { folderButton, folderChip, wireFolderControls } from '../folderpick.js';
 import { openRenameTakes, takesOfScene } from '../renametakes.js';
@@ -150,6 +150,14 @@ function clipsTable() {
     })}</tbody></table>`;
 }
 
+/** Read every slate in a folder again (or in the whole film) and offer names for all of it, including takes that already have one. */
+function readEverything(path) {
+  const mine = allClips().filter((c) => !c.skip && (!path || path === '.' || inFolder(c.dir, path)));
+  if (!mine.length) { toast('No clips in there.'); return; }
+  const where = path && path !== '.' ? folderLabel(path) : 'the whole film';
+  openSlateReader({ keys: mine.map((c) => c.key), force: true, title: `Read and rename ${plural(mine.length, 'clip')} in ${where}` });
+}
+
 /** Folder cards: one per shoot day / card / subfolder, with what is in it. Click to look inside. */
 function foldersView() {
   // folders that only hold other folders are just containers; the cards are the places clips actually sit
@@ -166,6 +174,7 @@ function foldersView() {
         ${parent ? html`<div class="faint" style="font-size:12px">in ${parent}</div>` : ''}
         <div class="shot-meta tnum"><span>${plural(f.clips, 'clip')} · ${fmtDur(f.duration)}</span></div>
         <div class="row wrap" style="gap:6px">${f.scenes.length ? html`<span class="app-chip xs">Scenes ${f.scenes.join(', ')}</span>` : ''}${f.raw ? html`<span class="app-chip xs app-chip--warning">${f.raw} unnamed</span>` : ''}</div>
+        <button class="app-btn app-btn--sm" data-act="reread-folder" data-path="${f.path}" style="margin-top:8px;justify-self:start" title="Read every slate in this folder with Claude and rename, even clips that already have a name">${icon('bolt', 14)}<span>Read and rename all…</span></button>
       </div>
     </article>`;
   })}</div>`;
@@ -211,6 +220,7 @@ function render() {
           <div class="page-sub tnum">${S.filters.folder ? html`${folderChip()} · ` : ''}${plural(t.scenes, 'scene')} · ${plural(t.shots, 'shot')} · ${plural(t.takes, 'take')} · ${fmtDur(t.runtime)} of footage${clips().some((c) => c.kind === 'raw' && !c.skip) ? html` · <a href="#/ingest">${clips().filter((c) => c.kind === 'raw' && !c.skip).length} unnamed</a>` : ''}</div></div>
         <div class="page-actions">
           ${clips().some((c) => c.kind === 'raw' && !c.skip) ? html`<button class="app-btn" id="nameMany" title="Name the unnamed clips from their slates">${icon('slate')}<span>Name clips…</span></button>` : ''}
+          <button class="app-btn" id="namesMenu" title="Let Claude read the slates and name or re-check clips">${icon('bolt')}<span>Names</span>${icon('chevronDown', 12)}</button>
           <button class="app-btn" id="addScene">${icon('plus')}<span>Add scene</span></button>
           <button class="app-btn" id="editPlan">${icon('list')}<span>Shot list</span></button>
           <button class="app-btn" id="exportMenu">${icon('download')}<span>Export</span>${icon('chevronDown', 12)}</button>
@@ -287,7 +297,22 @@ export default {
       { label: 'Copy printed takes to a folder…', icon: 'folder', onClick: async () => { try { const r = await post('/api/pick-folder', { title: 'Copy printed takes to…' }); if (r.path) { await post('/api/selects', { dest: r.path }); toast('Copying printed takes. Follow it in the queue.', { type: 'success' }); } } catch (err) { toastError(err); } } },
     ], { align: 'end' }));
     wireFolderControls(el, on);
-    on(el, 'click', '[data-act="open-folder"]', (e, c) => { setFolderFilter(c.dataset.path); S.filters.boardMode = 'scenes'; });
+    on(el, 'click', '[data-act="open-folder"]', (e, c) => { if (e.target.closest('[data-act="reread-folder"]')) return; setFolderFilter(c.dataset.path); S.filters.boardMode = 'scenes'; });
+    on(el, 'click', '[data-act="reread-folder"]', (e, b) => { e.stopPropagation(); readEverything(b.dataset.path); });
+    on(el, 'click', '#namesMenu', (e, b) => {
+      const f = S.filters.folder;
+      const where = f ? folderLabel(f) : 'the whole film';
+      const mine = clips().filter((c) => !c.skip);
+      const raw = mine.filter((c) => c.kind === 'raw');
+      const named = mine.filter((c) => c.kind === 'shot');
+      openMenu(b, [
+        { head: `In ${where}` },
+        { label: `Read the ${plural(raw.length, 'unnamed clip')}…`, icon: 'bolt', onClick: () => raw.length ? openSlateReader({ keys: raw.map((c) => c.key), title: `Read slates in ${where}` }) : toast('Every clip here already has a name.') },
+        { label: `Check the ${plural(named.length, 'named take')} against their slates…`, icon: 'bolt', onClick: () => named.length ? openSlateReader({ keys: named.map((c) => c.key), force: true, title: `Check names in ${where}` }) : toast('No named takes here yet.') },
+        { sep: true },
+        { label: `Read and rename all ${mine.length} clips, named or not…`, icon: 'bolt', onClick: () => readEverything(f) },
+      ], { align: 'end' });
+    });
     on(el, 'click', '[data-add-folder]', async (e, b) => { b.disabled = true; try { await patch('/api/project', { folders: [...S.info.project.folders, b.dataset.addFolder] }); await loadInfo(); toast('Folder added. Scanning…', { type: 'success' }); discover(); } catch (err) { toastError(err); b.disabled = false; } });
     on(el, 'click', '[data-act="toggle-scene"]', (e, b) => { const id = b.dataset.scene; if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id); saveCollapsed(); this.update(); e.stopPropagation(); });
     on(el, 'click', '[data-act="add-shot"]', (e, b) => addShotDialog(b.dataset.scene));

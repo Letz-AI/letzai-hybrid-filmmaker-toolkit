@@ -179,6 +179,11 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   assert.equal(diff.status, 'differs');
   assert.equal(diff.take, 5);
 
+  // when a named take was read as something else (it will move), its old name is free: not flagged as taken
+  fake.state.answers.push(reading({ take: 1 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[1].key], force: true } })).json.job)).state, 'done');
+  assert.ok(!(await library()).find((c) => c.key === raws[1].key).slate.flags.includes('taken'));
+
   // a scene that is not in the shot list is flagged; one that is, is not
   assert.equal((await req('PUT', '/api/shotlist', { body: { text: ['# Scene 6', '6.2A wide'].join('\n') } })).status, 200);
   fake.state.answers.push(reading({ scene: '9', shot: '1', take: 1 }));
