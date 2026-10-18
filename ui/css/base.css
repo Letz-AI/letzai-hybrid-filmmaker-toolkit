@@ -65,3 +65,8 @@ h1, h2, h3, p { margin: 0; }
 .row.wrap { flex-wrap: wrap; }
 .grow { flex: 1; min-width: 0; }
 .hide { display: none !important; }
+
+/* The browser draws a select's list itself; give it an opaque surface so light text never lands on a white list. */
+select { color-scheme: inherit; }
+select option, select optgroup { background-color: var(--surface-raised); color: var(--color); }
+select optgroup { font-weight: 600; }
