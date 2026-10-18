@@ -1,0 +1,96 @@
+/*
+  Design tokens, mirrored from the LetzAI design system (letz.ai/brandguidelines/design-system).
+  Monochrome: ink is the accent, colour comes from the footage, green/red/amber mean feedback and nothing else.
+  No hex values in component CSS - use these tokens.
+*/
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color: #f5f5f7;
+  --text-secondary: rgba(235, 235, 245, 0.58);
+  --text-tertiary: rgba(235, 235, 245, 0.48);
+  --bg: #060606;
+  --surface-raised: #0f0f10;
+  --popupbg: #2c2c2e;
+  --hairline: hsla(0, 0%, 100%, 0.1);
+  --bordercolor: hsla(0, 0%, 100%, 0.14);
+  --control-hover-bg: color-mix(in srgb, #f5f5f7 5%, transparent);
+  --control-active-bg: color-mix(in srgb, #f5f5f7 9%, transparent);
+  --stdbuttonbg: #fff;
+  --stdbuttoncolor: #000;
+  --focus-ring: 0 0 0 2px #060606, 0 0 0 4px #f5f5f7;
+  --color-success: #3fb950;
+  --color-error: #f85149;
+  --color-warning: #d29922;
+  --elevation-raised: 0 0 0 1px hsla(0, 0%, 100%, 0.1), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --elevation-float: 0 0 0 1px hsla(0, 0%, 100%, 0.1), 0 10px 15px rgba(0, 0, 0, 0.35), 0 4px 6px rgba(0, 0, 0, 0.2);
+  --elevation-menu: 0 0 0 1px hsla(0, 0%, 100%, 0.1), 0 20px 25px rgba(0, 0, 0, 0.4), 0 8px 10px rgba(0, 0, 0, 0.2);
+  --scrim: rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color: #111;
+  --text-secondary: hsla(0, 0%, 7%, 0.52);
+  --text-tertiary: hsla(0, 0%, 7%, 0.46);
+  --bg: #fff;
+  --surface-raised: #fff;
+  --popupbg: #fff;
+  --hairline: rgba(0, 0, 0, 0.075);
+  --bordercolor: rgba(0, 0, 0, 0.11);
+  --control-hover-bg: color-mix(in srgb, #111 5%, transparent);
+  --control-active-bg: color-mix(in srgb, #111 9%, transparent);
+  --stdbuttonbg: #000;
+  --stdbuttoncolor: #f5f5f5;
+  --focus-ring: 0 0 0 2px #fff, 0 0 0 4px #111;
+  --color-success: #1a7f37;
+  --color-error: #cf222e;
+  --color-warning: #9a6700;
+  --elevation-raised: 0 0 0 1px rgba(0, 0, 0, 0.075), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --elevation-float: 0 0 0 1px rgba(0, 0, 0, 0.075), 0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04);
+  --elevation-menu: 0 0 0 1px rgba(0, 0, 0, 0.075), 0 20px 25px rgba(0, 0, 0, 0.1), 0 8px 10px rgba(0, 0, 0, 0.04);
+  --scrim: rgba(0, 0, 0, 0.3);
+}
+
+:root {
+  /* The media stage stays near-black in both themes so letterboxing never tints the picture. */
+  --media-stage-bg: #0a0a0a;
+  --media-stage-ink: hsla(0, 0%, 100%, 0.92);
+  --media-stage-dim: hsla(0, 0%, 100%, 0.55);
+  --media-stage-line: hsla(0, 0%, 100%, 0.18);
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-title: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --tracking-display-hero: -0.035em;
+  --tracking-display-section: -0.03em;
+  --text-display-hero: clamp(2.4rem, 5.5vw, 4rem);
+
+  --control-height-md: 34px;
+  --control-height-sm: 28px;
+  --control-radius: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --page-narrow: 720px;
+  --page-default: 960px;
+  --page-nav: 1200px;
+  --page-wide: 1440px;
+  --page-column: 800px;
+
+  --rail-width: 216px;
+  --topbar-height: 48px;
+}

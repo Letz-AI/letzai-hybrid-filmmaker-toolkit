@@ -1,0 +1,58 @@
+{
+  "name": "letzai-hybrid-filmmaker-kit",
+  "version": "0.1.0",
+  "description": "Review, sort and cut your shoot, see which shots are still missing, and send the takes to a LetzAI Canvas. Local, open source.",
+  "license": "MIT",
+  "private": false,
+  "type": "commonjs",
+  "main": "server/index.js",
+  "bin": {
+    "letzai-kit": "bin/letzai-kit.js"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "start:browser": "node server/index.js --browser",
+    "dev": "node --watch server/index.js --no-open",
+    "demo": "node scripts/make-demo.mjs",
+    "check": "node server/index.js --check",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "film",
+    "filmmaking",
+    "dailies",
+    "review",
+    "slate",
+    "letzai",
+    "canvas",
+    "ffmpeg"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit.git"
+  },
+  "files": [
+    "bin",
+    "server",
+    "ui",
+    "scripts",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "Start-Kit.bat",
+    "Start-Kit.command",
+    "start-kit.sh"
+  ],
+  "homepage": "https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit#readme",
+  "bugs": {
+    "url": "https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit/issues"
+  },
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ]
+}

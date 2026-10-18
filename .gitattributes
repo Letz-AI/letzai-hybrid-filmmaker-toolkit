@@ -1,0 +1,7 @@
+# Line endings: the repository stores LF. Windows launchers keep CRLF; shell scripts must be LF or they fail on macOS and Linux.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.sh text eol=lf
+*.command text eol=lf
+*.png binary
+*.jpg binary

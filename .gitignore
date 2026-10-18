@@ -1,0 +1,13 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+*.part
+*.part.*
+.env
+letzai.key
+/bin/ffmpeg*
+/bin/ffprobe*
+/tools/
+/shots/
+coverage/

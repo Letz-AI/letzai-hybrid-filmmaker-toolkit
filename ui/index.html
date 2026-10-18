@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LetzAI Hybrid Filmmaker Kit</title>
+  <meta name="color-scheme" content="dark light">
+  <!-- A neutral slate glyph. The LetzAI logo files are not bundled (see docs/BRANDING.md). -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23000'/%3E%3Cpath d='M8 13h16v9a1.5 1.5 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 8 22zM8 13l-.7-3.500 15.400-2.800.8 3.700' fill='none' stroke='%23fff' stroke-width='1.800' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <!-- Inter for the product, Space Grotesk for the welcome headline. Both degrade to the system font offline. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600&display=swap">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    (function () {
+      try {
+        var t = localStorage.getItem('theme') || 'dark';
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/views.css">
+</head>
+<body>
+  <div id="app" class="no-project">
+    <header class="topbar" id="topbar"></header>
+    <nav class="rail" id="rail" aria-label="Main"></nav>
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>
+  <noscript>This tool needs JavaScript.</noscript>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
