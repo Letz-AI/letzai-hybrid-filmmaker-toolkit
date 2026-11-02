@@ -336,6 +336,19 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   v = (await req('PUT', '/api/vision', { body: { provider: 'openai' } })).json;
   assert.deepEqual([v.model, v.key.set, v.consent], ['gpt-6-luna', true, true]);
   assert.deepEqual(v.providers.map((x) => [x.id, x.key.set]), [['anthropic', false], ['openai', true], ['google', true]]);
+
+  // start from scratch: keys, settings, recent films and spending are gone, the project is closed, setup runs again;
+  // the film folder keeps its project file and readings
+  const home = path.join(process.env.LETZAI_KIT_HOME, 'config');
+  assert.ok(fs.existsSync(path.join(home, 'spend.json')));
+  const reset = await req('POST', '/api/reset');
+  assert.equal(reset.status, 200, reset.text);
+  assert.deepEqual(reset.json.envKeys, []);
+  for (const f of ['config.json', 'openai.key', 'gemini.key', 'spend.json']) assert.ok(!fs.existsSync(path.join(home, f)), `${f} removed`);
+  const fresh = (await req('GET', '/api/info')).json;
+  assert.deepEqual([fresh.project, fresh.setup.done, fresh.key.set, fresh.vision.keySet, fresh.recent.length], [null, false, false, false, 0]);
+  assert.equal((await req('GET', '/api/vision')).json.budget.spent, 0);
+  assert.ok(fs.existsSync(path.join(film, 'letzai-kit.json')), 'the film folder is not touched');
 });
 
 test('an older config (one Claude model, one consent switch) still reads the same', async () => {

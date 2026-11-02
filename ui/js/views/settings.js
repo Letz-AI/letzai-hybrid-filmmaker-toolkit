@@ -100,6 +100,7 @@ function draw() {
     <div class="surface pad data-list">
       <div class="row"><div class="grow"><b>Project file</b><div class="faint tnum">${p.root}\\letzai-kit.json</div></div><button class="app-btn app-btn--sm" id="revealProj">${icon('folder', 14)}<span>Show</span></button></div>
       <div class="row"><div class="grow"><b>Local cache</b><div class="faint tnum">${doctor ? doctor.dirs.cache : '…'} · safe to delete</div></div></div>
+      <div class="row"><div class="grow"><b>Start from scratch</b><div class="faint">Removes your LetzAI and AI keys, settings, the list of recent films and the spending count from this computer, as on a first start. Film folders and footage are not touched.</div></div><button class="app-btn app-btn--sm app-btn--danger" id="resetAll">${icon('trash', 14)}<span>Reset…</span></button></div>
       <div class="row"><div class="grow"><b>Import from continuity-log.csv</b><div class="faint">Ratings, prints and notes from the old namer</div></div><button class="app-btn app-btn--sm" id="importLog">Import</button></div>
     </div>
     </details>
@@ -159,6 +160,20 @@ export default {
     on(el, 'click', '#visRemove', async () => { try { vis = await put('/api/vision', { key: '' }); visMsg = null; await loadInfo(); draw(); toast('Key removed from this computer.', { type: 'success' }); } catch (e) { toastError(e); } });
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'sVisKey') el.querySelector('#visSave').click(); });
     on(el, 'click', '#renameAll', () => openRenameAll());
+    on(el, 'click', '#resetAll', async () => {
+      const ok = await confirmDialog({
+        title: 'Start from scratch?',
+        message: 'Your LetzAI key and your Claude, ChatGPT and Gemini keys are deleted from this computer, so you will need to paste them again. Settings, the list of recent films and this month’s spending count are reset too, and the setup assistant opens. Your film folders, footage, ratings and notes stay as they are.',
+        confirmLabel: 'Reset everything', danger: true,
+      });
+      if (!ok) return;
+      try {
+        const r = await post('/api/reset');
+        if (r.envKeys.length) await confirmDialog({ title: 'Some keys are still active', message: `These keys come from environment variables, which the kit cannot remove: ${r.envKeys.join(', ')}. Remove them from your system settings to test without them.`, confirmLabel: 'OK' });
+        location.hash = '#/';
+        location.reload();
+      } catch (e) { toastError(e); }
+    });
     on(el, 'click', '#setupAgain', () => openSetup({ onDone: () => get('/api/vision').then((r) => { vis = r; draw(); }).catch(() => {}) }));
     on(el, 'click', '#revealProj', () => post('/api/reveal', {}).catch(toastError));
   },

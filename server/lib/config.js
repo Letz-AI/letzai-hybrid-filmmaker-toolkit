@@ -146,6 +146,21 @@ async function setSetupDone(done = true) {
   await saveConfig(c);
 }
 
+/**
+ * Start from scratch: forget everything kept for this user (keys, settings, recent films, spending, the setup flag),
+ * as on a first start. Film folders and the cache are not touched. Keys set as environment variables cannot be
+ * removed from here; their names are returned so the person can be told.
+ */
+function resetUser() {
+  const files = ['config.json', 'letzai.key', 'spend.json', ...Object.values(VISION_KEYS).map((k) => k.file)];
+  const removed = [];
+  for (const f of files) {
+    try { fs.unlinkSync(path.join(configDir(), f)); removed.push(f); } catch { /* not there */ }
+  }
+  const envKeys = ['LETZAI_API_KEY', ...Object.values(VISION_KEYS).flatMap((k) => k.env)].filter((n) => process.env[n] && process.env[n].trim());
+  return { removed, envKeys };
+}
+
 async function rememberProject(root, name) {
   const cfg = loadConfig();
   cfg.recent = [{ root, name, openedAt: new Date().toISOString() }, ...cfg.recent.filter((r) => r.root !== root)].slice(0, 12);
@@ -158,4 +173,4 @@ async function forgetProject(root) {
   await saveConfig(cfg);
 }
 
-module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, getVisionKey, visionKeySource, setVisionKey, visionConfig, setVisionConfig, visionSpend, addVisionSpend, setupState, setSetupDone, rememberProject, forgetProject, APP_DIR_NAME };
+module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, getVisionKey, visionKeySource, setVisionKey, visionConfig, setVisionConfig, visionSpend, addVisionSpend, setupState, setSetupDone, resetUser, rememberProject, forgetProject, APP_DIR_NAME };

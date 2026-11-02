@@ -198,6 +198,13 @@ function createServer({ token, port, app: injected }) {
 
     'PUT /api/key': async ({ body }) => { await cfg.setKey(body.key); return app.info().key; },
     'PUT /api/setup': async ({ body }) => { await cfg.setSetupDone(body.done !== false); return cfg.setupState(); },
+    'POST /api/reset': async () => {
+      // an upload or slate reading still running would use a key that is about to disappear
+      if (app.jobs.list.some((j) => !j.background && (j.state === 'queued' || j.state === 'running'))) throw httpError(409, 'Wait until the running jobs (uploads, slate readings) are finished, or stop them in the queue.');
+      app.jobs.cancelBackground('proxy');
+      await app.closeProject();
+      return cfg.resetUser();
+    },
 
     'POST /api/jobs/cancel': async ({ body }) => ({ ok: app.jobs.cancel(body.id) }),
     'POST /api/jobs/clear': async () => { app.jobs.clearFinished(); return { ok: true }; },
