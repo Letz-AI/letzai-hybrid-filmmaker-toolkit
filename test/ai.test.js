@@ -13,6 +13,7 @@ process.env.LETZAI_KIT_HOME = path.join(tmp, 'home');
 const ff = require('../server/lib/ffmpeg');
 const { aiHints, suggestTake } = require('../server/lib/ai');
 const { createServer } = require('../server/index.js');
+const { until } = require('./helpers/wait');
 
 const loc = ff.locate(true);
 const skip = !loc.ok && 'ffmpeg not installed';
@@ -81,7 +82,7 @@ test('map AI results to takes: add, update, survive a rename, stream with Range,
 
   assert.equal((await req('POST', '/api/project/create', { body: { root: film, name: 'T', prefix: 'Film' } })).status, 200);
   let lib;
-  for (let i = 0; i < 60; i++) { lib = (await req('GET', '/api/library')).json; if (lib.clips.every((c) => c.probe)) break; await new Promise((r) => setTimeout(r, 100)); }
+  await until(async () => { lib = (await req('GET', '/api/library')).json; return lib.clips.every((c) => c.probe); }, 'every clip to be probed');
   const named = lib.clips.find((c) => c.kind === 'shot');
   const raw = lib.clips.find((c) => c.kind === 'raw');
 

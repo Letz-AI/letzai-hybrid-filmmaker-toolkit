@@ -12,6 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-srv-'));
 process.env.LETZAI_KIT_HOME = path.join(tmp, 'home');
 const ff = require('../server/lib/ffmpeg');
 const { createServer } = require('../server/index.js');
+const { until } = require('./helpers/wait');
 
 const loc = ff.locate(true);
 const skip = !loc.ok && 'ffmpeg not installed';
@@ -98,7 +99,7 @@ test('project lifecycle, media range requests, reports, rename and undo', { skip
 
   // wait for probing
   let lib;
-  for (let i = 0; i < 60; i++) { lib = (await req('GET', '/api/library')).json; if (lib.clips.every((c) => c.probe)) break; await new Promise((r) => setTimeout(r, 100)); }
+  await until(async () => { lib = (await req('GET', '/api/library')).json; return lib.clips.every((c) => c.probe); }, 'every clip to be probed');
   const raw = lib.clips.find((c) => c.kind === 'raw');
   const named = lib.clips.find((c) => c.kind === 'shot');
   assert.ok(raw && named);

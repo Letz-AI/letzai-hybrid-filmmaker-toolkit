@@ -17,6 +17,7 @@ const vision = require('../server/lib/vision');
 const slate = require('../server/lib/slate');
 const { createServer } = require('../server/index.js');
 const { startFakeAnthropic } = require('./helpers/fake-anthropic');
+const { until } = require('./helpers/wait');
 
 const loc = ff.locate(true);
 const skip = !loc.ok && 'ffmpeg not installed';
@@ -55,14 +56,10 @@ function req(method, url, { body } = {}) {
     r.end();
   });
 }
-async function waitJob(id) {
-  for (let i = 0; i < 200; i++) {
-    const j = (await req('GET', '/api/jobs')).json.jobs.find((x) => x.id === id);
-    if (j && (j.state === 'done' || j.state === 'error' || j.state === 'canceled')) return j;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error('job did not finish');
-}
+const waitJob = (id) => until(async () => {
+  const j = (await req('GET', '/api/jobs')).json.jobs.find((x) => x.id === id);
+  return j && (j.state === 'done' || j.state === 'error' || j.state === 'canceled') && j;
+}, 'the slate job to finish');
 const library = async () => (await req('GET', '/api/library')).json.clips;
 
 test.after(async () => { try { server && server.close(); } catch { /* not started */ } if (fake) await fake.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
@@ -91,7 +88,7 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
 
   assert.equal((await req('POST', '/api/project/create', { body: { root: film, name: 'T', prefix: 'Film' } })).status, 200);
   let clips;
-  for (let i = 0; i < 80; i++) { clips = await library(); if (clips.every((c) => c.probe)) break; await new Promise((r) => setTimeout(r, 100)); }
+  await until(async () => { clips = await library(); return clips.every((c) => c.probe); }, 'every clip to be probed');
   const raws = clips.filter((c) => c.kind === 'raw').sort((a, b) => a.name.localeCompare(b.name));
   const named = clips.find((c) => c.kind === 'shot');
 

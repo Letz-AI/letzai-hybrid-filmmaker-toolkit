@@ -12,6 +12,7 @@ process.env.LETZAI_KIT_HOME = path.join(tmp, 'home');
 const ff = require('../server/lib/ffmpeg');
 const { Project } = require('../server/lib/project');
 const { Jobs } = require('../server/lib/jobs');
+const { until } = require('./helpers/wait');
 
 const loc = ff.locate(true);
 const skip = !loc.ok && 'ffmpeg not installed';
@@ -23,7 +24,7 @@ function makeClip(file, seconds, label) {
 }
 
 async function waitProbes(p) {
-  for (let i = 0; i < 100 && p.library.some((e) => !e.probe); i++) await new Promise((r) => setTimeout(r, 100));
+  await until(() => !p.library.some((e) => !e.probe), 'every clip to be probed');
 }
 
 test('scan, rename with undo, metadata follows renames, cuts', { skip }, async () => {
@@ -113,7 +114,7 @@ test('proxies are generated for clips a browser cannot play', { skip }, async ()
   const e = p.library[0];
   const pb = await p.playback(e.key, { hevc: false });
   assert.equal(pb.pending, true);
-  for (let i = 0; i < 100 && jobs.list.some((j) => j.state === 'queued' || j.state === 'running'); i++) await new Promise((r2) => setTimeout(r2, 200));
+  await until(() => !jobs.list.some((j) => j.state === 'queued' || j.state === 'running'), 'the review copy');
   assert.ok(!jobs.list.some((j) => j.state === 'error'), 'no job failed');
   const pb2 = await p.playback(e.key, { hevc: false });
   assert.equal(pb2.kind, 'generated-proxy');
@@ -130,8 +131,8 @@ test('review copies are prepared in the background, unnamed clips first, only fo
   const p = await Project.create(dir, { name: 'B', prefix: 'Film', folders: ['.'] }, { jobs });
   await p.scan();
   await waitProbes(p);
-  await new Promise((r) => setTimeout(r, 200));
-  for (let i = 0; i < 100 && p.proxyStatus().active; i++) await new Promise((r) => setTimeout(r, 100));
+  // the copies start on their own; wait until they are done, not a fixed time (they may not have started yet)
+  await until(() => { const s = p.proxyStatus(); return s.ready === 2 && !s.active; }, 'both background review copies');
   const st = p.proxyStatus();
   assert.equal(st.ready, 2, 'both non-H.264 clips got a copy by themselves');
   assert.equal(st.left, 0);

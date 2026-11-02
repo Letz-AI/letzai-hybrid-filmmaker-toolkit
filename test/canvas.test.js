@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { createFakeLetzAI } = require('./helpers/fake-letzai');
+const { until } = require('./helpers/wait');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-cv-'));
 process.env.LETZAI_KIT_HOME = path.join(tmp, 'home');
@@ -141,14 +142,7 @@ test('page-per-scene sort starts below existing content and keeps its place', ()
 
 // ---- the whole job: cut -> upload, with a failure in the middle of a take --------------------------------------
 
-async function waitJobs(app, ms = 30000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (!app.jobs.list.some((j) => j.state === 'queued' || j.state === 'running')) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error('jobs did not finish');
-}
+const waitJobs = (app) => until(() => !app.jobs.list.some((j) => j.state === 'queued' || j.state === 'running'), 'the jobs to finish');
 
 async function makeApp(mode) {
   const film = path.join(tmp, `film-${Math.random().toString(36).slice(2, 7)}`);
@@ -160,7 +154,7 @@ async function makeApp(mode) {
   const p = app.project;
   p.state.snippets.maxSeconds = 2; p.state.snippets.height = 0;
   await p.updateSettings({ canvas: { canvasId: 'c1', canvasName: 'Fake', pageId: 'p2', pageName: 'Final Assets', mode } });
-  for (let i = 0; i < 100 && p.library.some((e) => !e.probe); i++) await new Promise((r) => setTimeout(r, 50));
+  await until(() => !p.library.some((e) => !e.probe), 'every clip to be probed');
   return { app, p, film };
 }
 

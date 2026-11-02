@@ -7,7 +7,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { Jobs } = require('../server/lib/jobs');
 
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const { until } = require('./helpers/wait');
+const idle = (jobs) => until(() => !jobs.list.some((j) => j.state === 'queued' || j.state === 'running'), 'the queue to empty');
 const gate = () => { let open; const p = new Promise((r) => { open = r; }); return { p, open }; };
 
 test('higher priority runs first, and a waiting user jumps a queued background job', async () => {
@@ -23,7 +24,7 @@ test('higher priority runs first, and a waiting user jumps a queued background j
   assert.equal(same.title, 'bg-b', 'no second job for the same clip');
   assert.equal(same.priority, 10);
   g.open();
-  await wait(100);
+  await idle(jobs);
   assert.deepEqual(order, ['b', 'a']);
 });
 
@@ -32,7 +33,7 @@ test('background jobs that finish leave no trace; failures and user jobs do', as
   jobs.add({ lane: 'misc', title: 'quiet', background: true, run: async () => {} });
   jobs.add({ lane: 'misc', title: 'loud', run: async () => {} });
   jobs.add({ lane: 'misc', title: 'broken', background: true, run: async () => { throw new Error('nope'); } });
-  await wait(50);
+  await idle(jobs);
   assert.deepEqual(jobs.list.map((j) => j.title).sort(), ['broken', 'loud']);
   assert.equal(jobs.list.find((j) => j.title === 'broken').state, 'error');
 });
@@ -44,6 +45,6 @@ test('turning preparation off cancels what is still queued in the background', a
   for (let i = 0; i < 5; i++) jobs.add({ lane: 'proxy', title: 'bg' + i, background: true, run: async () => {} });
   assert.equal(jobs.cancelBackground('proxy'), 5);
   g.open();
-  await wait(50);
+  await idle(jobs);
   assert.equal(jobs.list.filter((j) => j.title.startsWith('bg')).length, 0);
 });

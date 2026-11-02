@@ -13,10 +13,14 @@ jobs:
         node: [20, 22]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
+      # setup-ffmpeg only has Intel builds for macOS; the macOS runners are Apple Silicon, so Homebrew there
       - uses: FedericoCarboni/setup-ffmpeg@v3
+        if: runner.os != 'macOS'
+      - run: brew install ffmpeg
+        if: runner.os == 'macOS'
       - run: node --version && ffmpeg -version
       - run: npm test
