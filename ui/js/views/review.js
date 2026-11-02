@@ -7,6 +7,7 @@ import { toast, toastError, openMenu } from '../ui.js';
 import { folderButton, wireFolderControls } from '../folderpick.js';
 import { openRenameTakes, takesOfShot, takesOfScene } from '../renametakes.js';
 import { openSlateReader, aiName, aiReady } from '../slate.js';
+import { cutTakes, uploadItems, snippetSummary, snippetCard, openSnippet } from '../takeactions.js';
 import { openAddAi } from '../aiadd.js';
 
 const ls = {
@@ -170,20 +171,6 @@ function renderStrip() {
 }
 
 // ---- inspector ------------------------------------------------------------------------------
-function cutPlan(c) {
-  const max = Math.max(2, Number(S.info.project.snippets.maxSeconds) || 30);
-  const d = c.duration || dur();
-  if (!d) return [];
-  const ranges = c.cutRanges && c.cutRanges.length ? c.cutRanges.map((r) => ({ a: r.in, b: Math.min(d, r.out) })) : [{ a: 0, b: d }];
-  const out = [];
-  for (const r of ranges) {
-    const len = r.b - r.a;
-    if (len <= 0.05) continue;
-    const n = len <= max + 0.05 ? 1 : Math.ceil(len / max - 1e-9);
-    for (let i = 0; i < n; i++) out.push(n === 1 ? len : Math.min(max - 0.05, r.b - (r.a + i * max)));
-  }
-  return out;
-}
 
 function camRow(label, v) { return v ? html`<div class="kv"><span class="faint">${label}</span><span class="tnum">${v}</span></div>` : ''; }
 
@@ -193,7 +180,7 @@ function renderInspector() {
   if (!c) { mount(el, html`<div class="app-empty"><div class="app-empty-title">No clip selected</div></div>`); return; }
   const p = c.probe;
   const cam = p && p.camera;
-  const plan = cutPlan(c);
+  const plan = c.cutPlanLens || []; // snippet lengths as the server would cut them now
   const connected = S.info.project.canvas.canvasId && S.info.key.set;
   const ac = document.activeElement;
   const noteFocus = ac && ac.id === 'noteBox';
@@ -234,7 +221,7 @@ function renderInspector() {
           <button class="link-btn tnum" data-seek="${r.in}" data-out="${r.out}" title="Play this cut">${fmtTc(r.in, fps(c))} → ${fmtTc(r.out, fps(c))}</button>
           <input class="app-input cut-label" data-cut-label="${r.id}" value="${r.label}" placeholder="Label" maxlength="80">
           <button class="app-icon-btn app-icon-btn--sm" data-del-cut="${r.id}" title="Remove cut">${icon('close', 14)}</button></div>`)}</div>` : ''}
-      ${plan.length ? html`<div class="faint" style="font-size:12px;margin-top:8px" title="Snippets are at most ${S.info.project.snippets.maxSeconds} s">${plural(plan.length, 'snippet')} · ${plan.map((l) => Math.round(l)).join(', ')} s</div>` : ''}
+      ${plan.length ? html`<div class="faint" style="font-size:12px;margin-top:8px" title="Snippets are at most ${S.info.project.snippets.maxSeconds} s">${plural(plan.length, 'snippet')} · ${plan.map((l) => (l < 10 ? (Math.round(l * 10) / 10).toFixed(1) : Math.round(l))).join(', ')} s</div>` : ''}
       ${c.marks.length ? html`<div class="insp-label" style="margin-top:14px">Markers</div><div class="marks">${c.marks.map((m) => html`<div class="cut-row"><button class="link-btn tnum" data-seek="${m.t}">${fmtTc(m.t, fps(c))}</button><span class="grow faint">${m.label || ''}</span><button class="app-icon-btn app-icon-btn--sm" data-del-mark="${m.id}">${icon('close', 14)}</button></div>`)}</div>` : ''}
     </div>
 
@@ -247,10 +234,11 @@ function renderInspector() {
     ${c.kind === 'shot' ? html`<div class="insp-sec">
       <div class="insp-label">Canvas</div>
       ${c.canvasError ? html`<div class="app-alert app-alert--error" style="margin-bottom:10px">${icon('alert')}<div class="grow"><b>Didn’t reach the canvas</b><span style="word-break:break-word">${c.canvasError.message}</span>${(c.canvasError.files || []).slice(0, 4).map((f) => html`<div class="faint" style="font-size:12px;margin-top:4px">${f.file}</div>`)}</div></div>` : ''}
-      ${c.cutFiles.length ? html`<div class="row wrap" style="margin-bottom:10px"><span class="app-chip xs ${c.onCanvas ? 'app-chip--ink' : ''}">${icon(c.onCanvas ? 'check' : 'cloud', 12)} ${c.onCanvas ? 'On canvas' : `${c.cutOnCanvas} of ${c.cutFiles.length} on canvas`}</span></div>` : ''}
       <div class="row">${S.info.key.set ? html`<button class="app-btn app-btn--primary grow" id="sendCanvas">${icon('canvas')}<span>${!connected ? 'Connect canvas' : c.canvasError ? 'Retry send' : 'Send to canvas'}</span><span class="kbd">S</span></button>`
         : html`<button class="app-btn grow" disabled title="Needs a LetzAI API key">${icon('canvas')}<span>Send to canvas</span></button>`}
-        <button class="app-btn" id="cutOnly" title="Cut the snippets without uploading">${icon('scissors')}<span>Cut only</span></button></div>
+        <button class="app-icon-btn" id="cutOnly" title="Cut into snippets, without uploading">${icon('scissors')}</button>
+        <button class="app-icon-btn" id="uploadOnly" title="${S.info.key.set ? 'Upload the snippets to your LetzAI uploads (not to the canvas)' : 'Upload to LetzAI needs your LetzAI API key'}" ${S.info.key.set ? '' : 'disabled'}>${icon('upload')}</button></div>
+      ${c.cutFiles.length ? html`<div class="row" style="gap:6px;margin-top:12px">${snippetSummary(c)}</div><div class="snip-strip">${c.cutFiles.map((s) => snippetCard(c, s))}</div>` : ''}
       ${S.info.key.set ? '' : html`<div class="faint" style="font-size:12px;margin-top:6px">Sending needs your LetzAI API key. <a href="#/settings/letzai">Add it in Settings</a>.</div>`}
     </div>` : ''}
 
@@ -510,11 +498,8 @@ async function sendToCanvas() {
   try { await post('/api/canvas/send', { keys: [c.key] }); toast(`Cutting and uploading ${c.scene}.${c.shot} take ${c.take}…`, { type: 'success' }); } catch (e) { toastError(e); }
 }
 
-async function cutOnly() {
-  const c = cur();
-  if (!c) return;
-  try { await post('/api/cuts', { keys: [c.key] }); toast('Cutting snippets. Follow it in the queue.', { type: 'success' }); } catch (e) { toastError(e); }
-}
+function cutOnly() { const c = cur(); if (c) cutTakes([c.key]); }
+function uploadOnly() { const c = cur(); if (c) uploadItems({ keys: [c.key] }); }
 
 // ---- wiring ----------------------------------------------------------------------------------------------------------
 function bindPlayer() {
@@ -615,6 +600,8 @@ function bindPlayer() {
   on(root, 'click', '[data-del-mark]', (e, b) => { const marks = cur().marks.filter((m) => m.id !== b.dataset.delMark); saveMeta({ marks }, { local: { marks } }); renderInspector(); paintLayer(); });
   on(root, 'click', '#sendCanvas', sendToCanvas);
   on(root, 'click', '#cutOnly', cutOnly);
+  on(root, 'click', '#uploadOnly', uploadOnly);
+  on(root, 'click', '[data-snip]', (e, card) => openSnippet(card.dataset.snip, card.dataset.n));
   on(root, 'click', '#nameIt', () => window.kitGo('ingest', key));
   on(root, 'click', '#reveal', () => post('/api/reveal', { key }).catch(toastError));
   on(root, 'click', '#copyName', async () => { if (await copyText(cur().name)) toast('File name copied.'); });

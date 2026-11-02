@@ -203,6 +203,34 @@ input[type="range"] { accent-color: var(--color); height: 28px; }
 .settings-body .muted, .settings-body .faint { overflow-wrap: anywhere; }
 .settings-body > .surface:first-of-type, .settings-body > .settings-sub + .surface, .settings-body > .settings-title + .surface { margin-top: var(--space-6); }
 .settings-body .section-label { margin-top: var(--space-6); }
+/* All clips: snippets under their take, and the bar for ticked takes */
+.clip-table tr.is-ticked > td { background: var(--control-hover-bg); }
+.snip-row > td { padding-top: 0; }
+/* snippets: cards with a frame, selectable, click to open */
+.snip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; padding: 4px 0 10px; }
+.snip-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-top: 8px; }
+.snip-card { border-radius: 10px; cursor: pointer; outline: none; min-width: 0; }
+.snip-thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--control-hover-bg); box-shadow: inset 0 0 0 1px var(--hairline); }
+.snip-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.snip-card:hover .snip-thumb, .snip-card:focus-visible .snip-thumb { box-shadow: 0 0 0 2px var(--text-tertiary); }
+.snip-card.is-picked .snip-thumb { box-shadow: 0 0 0 2px var(--color); }
+.snip-check { position: absolute; top: 6px; left: 6px; display: flex; padding: 3px; border-radius: 6px; background: rgba(0, 0, 0, 0.45); cursor: pointer; }
+.snip-play { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; opacity: 0; transition: opacity var(--duration-fast); background: rgba(0, 0, 0, 0.25); pointer-events: none; }
+.snip-card:hover .snip-play { opacity: 1; }
+.snip-dur { position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 5px; font-size: 11px; color: #fff; background: rgba(0, 0, 0, 0.6); }
+.snip-badges { position: absolute; right: 6px; top: 6px; display: flex; gap: 4px; }
+.snip-badge { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: #fff; background: rgba(0, 0, 0, 0.6); }
+.snip-meta { display: flex; align-items: center; gap: 6px; padding: 5px 2px 0; font-size: 12px; min-width: 0; }
+.snip-strip .snip-meta span:not(.tnum):not(.grow) { display: none; }
+.snip-groups { display: grid; gap: var(--space-6); }
+.snip-group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.link-btn { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; font: inherit; }
+.link-btn:hover { text-decoration: underline; }
+.action-bar { position: sticky; bottom: var(--space-4); margin: var(--space-4) auto 0; width: min(100%, 980px); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 14px; background: var(--surface-raised, var(--surface)); box-shadow: 0 0 0 1px var(--hairline), 0 12px 32px rgba(0, 0, 0, 0.28); z-index: 5; }
+.app-btn[aria-disabled="true"] { opacity: 0.45; }
+/* notifications move up while the action bar is showing, so they never cover its buttons */
+body:has(.action-bar) .toasts { bottom: 96px; }
+.snippet-video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; display: block; }
 .shortcut-list { display: grid; gap: 8px; }
 .shortcut-list .sc-keys { flex: 0 0 170px; }
 .shortcuts-popup .section-label:first-child { margin-top: 0; }
@@ -287,7 +315,6 @@ input[type="range"] { accent-color: var(--color); height: 28px; }
 .rename-list { max-height: 340px; }
 
 /* ---------- selecting takes ---------- */
-.tick-bar { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); border-radius: var(--radius-xl); background: var(--control-active-bg); box-shadow: inset 0 0 0 1px var(--hairline); }
 
 /* ---------- compare ---------- */
 .cmp-stage { position: relative; flex: 1; min-height: 160px; margin: 0 var(--space-4); border-radius: var(--radius-xl); overflow: hidden; background: var(--media-stage-bg); user-select: none; touch-action: none; }

@@ -206,15 +206,31 @@ class Project extends EventEmitter {
         e.probe = probe && !probe.error ? probe : null;
         e.duration = e.probe ? e.probe.duration : 0;
         e.recordedAt = e.probe ? e.probe.recordedAt : '';
-        // cut snippets sitting in <dir>/cuts/
+        // cut snippets sitting in <dir>/cuts/, each with what happened to it: uploaded to LetzAI, on the canvas
         const dirAbs = path.dirname(e.abs);
         const prefix = `${e.stem}-cut-`.toLowerCase();
+        const assets = m.assets || {};
+        const planNow = this.planCuts(e);
         e.cutFiles = listDir(path.join(dirAbs, 'cuts'))
           .filter((n) => n.toLowerCase().startsWith(prefix) && isVideoFile(n) && !/\.part\./i.test(n))
-          .map((n) => ({ name: n, n: parseInt((/-cut-(\d+)/i.exec(n) || [])[1] || '0', 10) }))
+          .map((n) => {
+            const num = parseInt((/-cut-(\d+)/i.exec(n) || [])[1] || '0', 10);
+            let size = 0;
+            try { size = fs.statSync(path.join(dirAbs, 'cuts', n)).size; } catch { /* just removed */ }
+            const a = assets[num];
+            // where in the take it comes from: as cut (kept since then), else as it would be cut now
+            const r = (m.cutPlan || []).find((x) => x.n === num) || planNow.find((x) => x.n === num) || {};
+            // an upload counts only for the exact file that was uploaded (cutting again makes a new file)
+            return { name: n, n: num, size, start: r.start || 0, len: r.len || 0, uploaded: a && a.size === size ? { url: a.url, at: a.at } : null, onCanvas: this.canvasNames.has(n) };
+          })
           .sort((a, b) => a.n - b.n);
-        e.cutOnCanvas = e.cutFiles.filter((c) => this.canvasNames.has(c.name)).length;
+        e.cutOnCanvas = e.cutFiles.filter((c) => c.onCanvas).length;
         e.onCanvas = e.cutFiles.length > 0 && e.cutOnCanvas === e.cutFiles.length;
+        e.cutUploaded = e.cutFiles.filter((c) => c.uploaded).length;
+        e.cutPlanned = planNow.length;
+        e.cutPlanLens = planNow.map((c) => Math.round(c.len * 100) / 100);
+        // ranges or cut settings changed since the snippets were made
+        e.cutStale = e.cutFiles.length > 0 && !!m.cutSig && m.cutSig !== this.cutSignature(e);
         // the camera's own proxy, if any
         e.camProxy = null;
         const candidates = [m.proxy ? this.absOf(m.proxy) : null];
@@ -649,11 +665,22 @@ class Project extends EventEmitter {
       const len = r.end - r.start;
       if (len <= 0.05) continue;
       const pieces = len <= max + 0.05 ? 1 : Math.ceil(len / max - 1e-9);
+      const part = [];
       for (let i = 0; i < pieces; i++) {
         const start = r.start + i * max;
         const l = pieces === 1 ? len : Math.min(max - 0.05, r.end - start);
-        out.push({ start, len: l, whole: pieces === 1 && ranges.length === 1 && r.start === 0 && Math.abs(r.end - dur) < 0.05, label: r.label || '' });
+        part.push({ start, len: l, whole: pieces === 1 && ranges.length === 1 && r.start === 0 && Math.abs(r.end - dur) < 0.05, label: r.label || '' });
       }
+      // no runt at the end: a leftover under a second shares the time with the piece before it (both stay under the limit)
+      const last = part[part.length - 1];
+      if (part.length > 1 && last.len < 1) {
+        const prev = part[part.length - 2];
+        const half = (last.start + last.len - prev.start) / 2;
+        prev.len = half;
+        last.start = prev.start + half;
+        last.len = half;
+      }
+      out.push(...part);
     }
     return out.map((c, i) => ({ ...c, n: i + 1, name: `${e.stem}-cut-${i + 1}${e.ext}` }));
   }
@@ -673,7 +700,10 @@ class Project extends EventEmitter {
     const stale = meta.cutSig !== sig;
     const outDir = path.join(path.dirname(e.abs), 'cuts');
     fs.mkdirSync(outDir, { recursive: true });
-    if (stale) for (const c of e.cutFiles) { try { fs.unlinkSync(path.join(outDir, c.name)); } catch { /* gone */ } }
+    if (stale) {
+      for (const c of e.cutFiles) { try { fs.unlinkSync(path.join(outDir, c.name)); } catch { /* gone */ } }
+      delete meta.assets; // uploads of the old snippets no longer match these files
+    }
     const { height, lossless, encoder } = this.state.snippets;
     const paths = [];
     for (let i = 0; i < plan.length; i++) {
@@ -689,6 +719,7 @@ class Project extends EventEmitter {
       });
     }
     meta.cutSig = sig;
+    meta.cutPlan = plan.map((c) => ({ n: c.n, start: Math.round(c.start * 1000) / 1000, len: Math.round(c.len * 1000) / 1000 }));
     this.scheduleSave();
     await this.scan();
     return paths;
@@ -778,10 +809,50 @@ class Project extends EventEmitter {
     });
   }
 
-  mediaPath(e, src) {
+  mediaPath(e, src, n) {
     if (src === 'cam' && e.camProxy) return e.camProxy;
     if (src === 'gen') return this.proxyPath(e);
+    if (src === 'cut') return this.cutPath(e, n);
     return e.abs;
+  }
+
+  /** The file of snippet number n of a take. */
+  cutPath(e, n) {
+    const c = e.cutFiles.find((x) => x.n === Number(n));
+    if (!c) throw httpError(404, 'That snippet does not exist (any more).');
+    return path.join(path.dirname(e.abs), 'cuts', c.name);
+  }
+
+  /** Remember that snippet n was uploaded to LetzAI (user assets), so it is not uploaded twice. */
+  recordAsset(key, n, asset) {
+    const m = this.state.clips[key] || (this.state.clips[key] = { sig: this.entry(key).sig });
+    m.assets = { ...(m.assets || {}), [n]: { id: asset.id || null, url: asset.imageUrl || asset.url, size: asset.size, at: new Date().toISOString() } };
+    this.scheduleSave();
+  }
+
+  /** The upload record of snippet n, if it is for the file that is there now. */
+  assetFor(key, n) {
+    const e = this.entry(key);
+    const c = e.cutFiles.find((x) => x.n === Number(n));
+    const a = ((this.state.clips[key] || {}).assets || {})[n];
+    return c && a && a.size === c.size ? a : null;
+  }
+
+  /**
+   * Delete snippets the kit made for a take (only files in its cuts folder): all of them, or the numbers in `only`.
+   * The take itself is not touched.
+   */
+  deleteCuts(key, only) {
+    const e = this.entry(key);
+    const dir = path.join(path.dirname(e.abs), 'cuts');
+    const list = only ? e.cutFiles.filter((c) => only.includes(c.n)) : e.cutFiles;
+    let n = 0;
+    for (const c of list) { try { fs.unlinkSync(path.join(dir, c.name)); n++; } catch { /* gone already */ } }
+    const m = this.state.clips[key];
+    if (m && (!only || list.length === e.cutFiles.length)) { delete m.cutSig; delete m.assets; delete m.cutPlan; }
+    else if (m && m.assets) for (const c of list) delete m.assets[c.n];
+    this.scheduleSave();
+    return n;
   }
 
   /** Cached JPEG frame (poster / hover frames). Uses the lightest source available for speed. */

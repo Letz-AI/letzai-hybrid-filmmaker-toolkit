@@ -151,7 +151,21 @@ function createServer({ token, port, app: injected }) {
       const c = await app.client.getCanvas(url.searchParams.get('canvasId')).catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); });
       return { name: c.name, defaultPageId: c.defaultPageId, pages: (c.pages || []).map((p) => ({ id: p.id, name: p.name, nodeCount: p.nodeCount })) };
     },
-    'POST /api/canvas/send': async ({ body }) => ({ jobs: app.sendToCanvas(body.keys).map((j) => j.id) }),
+    'POST /api/canvas/send': async ({ body }) => ({ jobs: app.sendToCanvas(body.keys || [], body.snippets || []).map((j) => j.id) }),
+    'POST /api/letzai/upload': async ({ body }) => ({ jobs: app.uploadToLetzAI(body.keys || [], body.snippets || []).map((j) => j.id) }),
+    'POST /api/cuts/delete': async ({ body }) => {
+      const p = app.requireProject();
+      const keys = (body.keys || []).filter((k) => p.byKey.has(k));
+      const only = new Map();
+      for (const s of body.snippets || []) if (s && p.byKey.has(s.key) && !keys.includes(s.key)) only.set(s.key, [...(only.get(s.key) || []), Number(s.n)]);
+      const busy = new Set(app.jobs.list.filter((j) => j.state === 'queued' || j.state === 'running').map((j) => String(j.dedupeKey || '').split(':').slice(1).join(':').split('#')[0]));
+      if ([...keys, ...only.keys()].some((k) => busy.has(k))) throw httpError(409, 'Some of these takes are being cut or uploaded right now. Try again when that is finished.');
+      let deleted = 0;
+      for (const k of keys) deleted += p.deleteCuts(k);
+      for (const [k, ns] of only) deleted += p.deleteCuts(k, ns);
+      await p.scan();
+      return { deleted };
+    },
     'POST /api/canvas/sort': async () => app.sortCanvas().catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); }),
     'POST /api/canvas/pages': async () => ({ pages: await app.canvasPages(true).catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); }) }),
     'POST /api/canvas/labels': async ({ body }) => app.createLabels(body.scenes || []).catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); }),
@@ -228,7 +242,7 @@ function createServer({ token, port, app: injected }) {
     'GET /api/browse': async ({ url }) => browse(url.searchParams.get('dir')),
     'POST /api/reveal': async ({ body }) => {
       const p = app.requireProject();
-      const target = body.key ? p.absOf(body.key) : path.resolve(body.path || p.root);
+      const target = body.key && body.cut != null ? p.cutPath(p.entry(body.key), body.cut) : body.key ? p.absOf(body.key) : path.resolve(body.path || p.root);
       reveal(target);
       return { ok: true };
     },
@@ -257,7 +271,7 @@ function createServer({ token, port, app: injected }) {
       if (url.pathname === '/media') {
         const p = app.requireProject();
         const e = p.entry(url.searchParams.get('key'));
-        const file = p.mediaPath(e, url.searchParams.get('src'));
+        const file = p.mediaPath(e, url.searchParams.get('src'), url.searchParams.get('n'));
         if (!fs.existsSync(file)) throw httpError(404, 'Media not found');
         return serveFile(req, res, file, 'video/mp4');
       }

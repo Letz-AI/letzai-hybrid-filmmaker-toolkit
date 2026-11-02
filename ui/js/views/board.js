@@ -1,14 +1,20 @@
 // The Dashboard (route #/board): the plan laid over what was shot. Which shots are covered, which are missing, which need a decision.
 import { html, icon, mount, on, $, $$, fmtDur, fmtClock, fmtDay, plural, clamp, debounce } from '../lib.js';
 import { get, post, patch } from '../api.js';
-import { S, scenes, totals, clips, allClips, takesOf, clip, folders, folderLabel, hasManyFolders, setFolderFilter, loadInfo, failedSends } from '../store.js';
+import { S, scenes, totals, clips, allClips, takesOf, clip, folders, folderLabel, hasManyFolders, setFolderFilter, loadInfo, failedSends, subscribeJobs } from '../store.js';
 import { toast, toastError, openMenu } from '../ui.js';
 import { folderButton, folderChip, wireFolderControls } from '../folderpick.js';
 import { openRenameTakes, takesOfScene } from '../renametakes.js';
 import { openShotList, addShotDialog, addSceneDialog, planOp } from './shotlist.js';
+import { cutTakes, uploadItems, sendItems, deleteItems, copyLinks, openSnippet, snippetCard, snippetOf, snippetSummary, busyWith } from '../takeactions.js';
 
 let root;
 const ticked = new Set(); // takes ticked in All clips
+const expanded = new Set(); // takes whose snippets are shown in All clips
+const picked = new Set();   // single snippets ticked, as "takeKey#n"
+const pickedList = () => [...picked].map((id) => { const i = id.lastIndexOf('#'); return { key: id.slice(0, i), n: Number(id.slice(i + 1)) }; });
+const selection = () => ({ keys: [...ticked], snippets: pickedList() });
+const takeLabel = (c) => (c.kind === 'shot' ? html`<b class="tnum">${c.scene}.${c.shot}</b> <span class="muted">take ${c.take}</span>` : html`<b>${c.orig || c.name}</b>`);
 const collapsed = new Set(JSON.parse(localStorage.getItem('board.collapsed') || '[]'));
 const saveCollapsed = () => { try { localStorage.setItem('board.collapsed', JSON.stringify([...collapsed])); } catch { /* ignore */ } };
 
@@ -94,17 +100,18 @@ function clipsTable() {
   const rows = clips().filter((c) => !q || `${c.name} ${c.orig} ${c.note} ${c.scene}.${c.shot}`.toLowerCase().includes(q));
   if (!rows.length) return html`<div class="app-empty"><div class="app-empty-title">No clips match</div></div>`;
   for (const k of [...ticked]) if (!clip(k)) ticked.delete(k);
-  const bar = ticked.size ? html`<div class="tick-bar"><b>${plural(ticked.size, 'take')} selected</b><span class="grow"></span><button class="app-btn app-btn--sm" id="tickClear">Clear</button><button class="app-btn app-btn--sm app-btn--primary" id="renameTicked">${icon('pencil', 14)}<span>Rename selected…</span></button></div>` : '';
   const byFolder = hasManyFolders();
+  const cols = byFolder ? 10 : 9;
   let lastGroup = '';
-  return html`${bar}<table class="table clip-table">
-    <thead><tr><th style="width:36px"><input type="checkbox" class="app-check" id="tickAll" aria-label="Select all takes" ${rows.filter((c) => c.kind === 'shot').length && rows.filter((c) => c.kind === 'shot').every((c) => ticked.has(c.key)) ? 'checked' : ''}></th><th style="width:92px"></th><th>Name</th><th>Original</th>${byFolder ? html`<th>Folder</th>` : ''}<th>Recorded</th><th>Length</th><th>Rating</th><th>Print</th><th>Canvas</th></tr></thead>
+  return html`<table class="table clip-table">
+    <thead><tr><th style="width:36px"><input type="checkbox" class="app-check" id="tickAll" aria-label="Select all takes" ${rows.filter((c) => c.kind === 'shot').length && rows.filter((c) => c.kind === 'shot').every((c) => ticked.has(c.key)) ? 'checked' : ''}></th><th style="width:92px"></th><th>Name</th><th>Original</th>${byFolder ? html`<th>Folder</th>` : ''}<th>Recorded</th><th>Length</th><th>Rating</th><th>Snippets</th></tr></thead>
     <tbody>${rows.map((c) => {
       // with several folders (shoot days) the table is grouped by folder, otherwise by recording day
       const group = byFolder ? (c.dir === '.' ? folderLabel('.') : c.dir) : fmtDay(c.recordedAt);
-      const head = group && group !== lastGroup ? html`<tr class="day-row"><td colspan="${byFolder ? 10 : 9}">${byFolder ? html`${icon('folder', 12)} ` : ''}${group}</td></tr>` : '';
+      const head = group && group !== lastGroup ? html`<tr class="day-row"><td colspan="${cols}">${byFolder ? html`${icon('folder', 12)} ` : ''}${group}</td></tr>` : '';
       lastGroup = group || lastGroup;
-      return html`${head}<tr data-act="${c.kind === 'shot' ? 'open-clip' : 'open-raw'}" data-key="${c.key}" tabindex="0">
+      const open = expanded.has(c.key) && c.cutFiles.length;
+      return html`${head}<tr data-act="${c.kind === 'shot' ? 'open-clip' : 'open-raw'}" data-key="${c.key}" tabindex="0" class="${ticked.has(c.key) ? 'is-ticked' : ''}">
         <td>${c.kind === 'shot' ? html`<input type="checkbox" class="app-check" data-tick="${c.key}" ${ticked.has(c.key) ? 'checked' : ''} aria-label="Select ${c.name}">` : ''}</td>
         <td><div class="mini-poster"><img loading="lazy" alt="" src="${posterUrl(c, 200)}" onerror="this.style.visibility='hidden'"></div></td>
         <td>${c.kind === 'shot' ? html`<b class="tnum">${c.scene}.${c.shot}</b> <span class="muted">take ${c.take}</span>` : html`<span class="app-chip xs app-chip--quiet">Unnamed</span>`}<div class="faint mono-name" style="font-size:12px">${c.name}</div></td>
@@ -112,11 +119,57 @@ function clipsTable() {
         ${byFolder ? html`<td class="faint">${folderLabel(c.dir)}</td>` : ''}
         <td class="tnum muted">${fmtClock(c.recordedAt)}</td>
         <td class="tnum muted">${fmtDur(c.duration)}</td>
-        <td>${c.rating ? html`<span class="app-chip xs">${c.rating}</span>` : html`<span class="faint">—</span>`}</td>
-        <td>${c.print ? icon('flagFill') : ''}</td>
-        <td>${c.canvasError ? html`<span class="app-chip xs app-chip--error" title="${c.canvasError.message}">${icon('alert', 12)} failed</span>` : c.onCanvas ? icon('checkCircle') : c.cutFiles.length ? html`<span class="faint tnum">${c.cutOnCanvas}/${c.cutFiles.length}</span>` : ''}</td>
-      </tr>`;
+        <td>${c.rating ? html`<span class="app-chip xs">${c.rating}</span>` : ''}${c.print ? html` <span title="Printed">${icon('flagFill', 14)}</span>` : ''}${!c.rating && !c.print ? html`<span class="faint">—</span>` : ''}</td>
+        <td><span class="row" style="gap:6px">${c.cutFiles.length ? html`<button class="app-icon-btn app-icon-btn--sm" data-expand="${c.key}" aria-expanded="${open ? 'true' : 'false'}" title="${open ? 'Hide' : 'Show'} the snippets">${icon(open ? 'chevronDown' : 'chevronRight', 14)}</button>` : ''}${c.kind === 'shot' ? snippetSummary(c) : ''}</span></td>
+      </tr>${open ? html`<tr class="snip-row"><td></td><td colspan="${cols - 1}"><div class="snip-grid">${c.cutFiles.map((s) => snippetCard(c, s, { pick: picked }))}</div></td></tr>` : ''}`;
     })}</tbody></table>`;
+}
+
+/** Every snippet as a card, grouped by take, to look at, select and send on. */
+const SNIP_FILTERS = [['all', 'All'], ['notUploaded', 'Not uploaded'], ['uploaded', 'Uploaded'], ['onCanvas', 'On canvas']];
+const snipPasses = (s, f) => f === 'all' || (f === 'notUploaded' ? !s.uploaded : f === 'uploaded' ? !!s.uploaded : s.onCanvas);
+function snippetsView() {
+  const f = S.filters.snips || 'all';
+  const q = S.filters.q.toLowerCase();
+  if (!clips().some((c) => c.cutFiles.length)) {
+    return html`<div class="app-empty"><div class="app-empty-title">No snippets yet</div><div class="app-empty-body">Snippets are the short pieces of a take (at most ${S.info.project.snippets.maxSeconds} s) that go to LetzAI. Tick takes in All clips and press Cut, or cut a take in Review.</div><button class="app-btn app-btn--outline" data-mode="clips">${icon('list', 14)}<span>All clips</span></button></div>`;
+  }
+  const groups = clips()
+    .filter((c) => c.cutFiles.length && (!q || `${c.name} ${c.orig} ${c.note} ${c.scene}.${c.shot}`.toLowerCase().includes(q)))
+    .map((c) => ({ c, list: c.cutFiles.filter((s) => snipPasses(s, f)) }))
+    .filter((g) => g.list.length);
+  if (!groups.length) return html`<div class="app-empty"><div class="app-empty-title">No snippets match</div></div>`;
+  return html`<div class="snip-groups">${groups.map(({ c, list }) => {
+    const ids = list.map((s) => `${c.key}#${s.n}`);
+    return html`<section class="snip-group">
+      <header class="snip-group-head">
+        <input type="checkbox" class="app-check" data-pick-many="${ids.join(' ')}" ${ids.every((id) => picked.has(id)) ? 'checked' : ''} aria-label="Select these snippets">
+        <button class="link-btn" data-open-take="${c.key}" title="Open the take in Review">${takeLabel(c)}</button>
+        ${snippetSummary(c)}
+      </header>
+      <div class="snip-grid">${list.map((s) => snippetCard(c, s, { pick: picked }))}</div>
+    </section>`;
+  })}</div>`;
+}
+
+/** The bar at the bottom while takes or snippets are ticked: everything that can be done with them. */
+function actionBar() {
+  const mode = S.filters.boardMode;
+  for (const x of pickedList()) if (!snippetOf(x.key, x.n)) picked.delete(`${x.key}#${x.n}`); // deleted or cut again
+  if ((mode !== 'clips' && mode !== 'snippets') || (!ticked.size && !picked.size)) return '';
+  const takes = ticked.size;
+  const noKey = !S.info.key.set;
+  const what = [takes && plural(takes, 'take'), picked.size && plural(picked.size, 'snippet')].filter(Boolean).join(' · ');
+  return html`<div class="action-bar" role="toolbar" aria-label="Selected">
+    <b>${what}</b>
+    <span class="grow"></span>
+    ${takes ? html`<button class="app-btn app-btn--sm" data-bulk="cut" title="Cut the ticked takes into snippets of at most ${S.info.project.snippets.maxSeconds} s, without uploading">${icon('scissors', 14)}<span>Cut</span></button>` : ''}
+    <button class="app-btn app-btn--sm" data-bulk="upload" aria-disabled="${noKey ? 'true' : 'false'}" title="${noKey ? 'Needs your LetzAI API key' : 'Upload to your LetzAI uploads (not the canvas). Takes are cut first.'}">${icon('upload', 14)}<span>Upload to LetzAI</span></button>
+    <button class="app-btn app-btn--sm app-btn--primary" data-bulk="send" aria-disabled="${noKey ? 'true' : 'false'}" title="${noKey ? 'Needs your LetzAI API key' : 'Place on your LetzAI Canvas. Takes are cut first.'}">${icon('canvas', 14)}<span>Send to Canvas</span></button>
+    ${takes ? html`<button class="app-btn app-btn--sm" data-bulk="rename">${icon('pencil', 14)}<span>Rename…</span></button>` : ''}
+    <button class="app-icon-btn app-icon-btn--sm" data-bulk="more" title="More">${icon('more', 16)}</button>
+    <button class="app-icon-btn app-icon-btn--sm" id="tickClear" title="Clear the selection">${icon('close', 16)}</button>
+  </div>`;
 }
 
 /** Folder cards: one per shoot day / card / subfolder, with what is in it. Click to look inside. */
@@ -187,14 +240,17 @@ function render() {
         <div id="discoverBanner">${discoverBanner()}</div>
         ${sendProblems()}
         <div class="toolbar">
-          <div class="app-tabs" role="tablist">${filters.map(([id, label, n]) => html`<button class="app-tab" role="tab" data-filter="${id}" aria-selected="${S.filters.board === id}">${label}${n ? html`<span class="n">${n}</span>` : ''}</button>`)}</div>
+          ${mode === 'snippets'
+            ? html`<div class="app-tabs" role="tablist">${SNIP_FILTERS.map(([id, label]) => { const n = clips().reduce((a, c) => a + c.cutFiles.filter((s) => snipPasses(s, id)).length, 0); return html`<button class="app-tab" role="tab" data-snipfilter="${id}" aria-selected="${(S.filters.snips || 'all') === id}">${label}${n ? html`<span class="n">${n}</span>` : ''}</button>`; })}</div>`
+            : html`<div class="app-tabs" role="tablist">${filters.map(([id, label, n]) => html`<button class="app-tab" role="tab" data-filter="${id}" aria-selected="${S.filters.board === id}">${label}${n ? html`<span class="n">${n}</span>` : ''}</button>`)}</div>`}
           <span class="grow"></span>
           ${folderButton()}
-          <div class="app-segmented" role="group"><button data-mode="scenes" aria-pressed="${mode === 'scenes'}">${icon('board', 14)}By scene</button>${folders().length > 1 ? html`<button data-mode="folders" aria-pressed="${mode === 'folders'}">${icon('folder', 14)}By folder</button>` : ''}<button data-mode="clips" aria-pressed="${mode === 'clips'}">${icon('list', 14)}All clips</button></div>
+          <div class="app-segmented" role="group"><button data-mode="scenes" aria-pressed="${mode === 'scenes'}">${icon('board', 14)}By scene</button>${folders().length > 1 ? html`<button data-mode="folders" aria-pressed="${mode === 'folders'}">${icon('folder', 14)}By folder</button>` : ''}<button data-mode="clips" aria-pressed="${mode === 'clips'}">${icon('list', 14)}All clips</button><button data-mode="snippets" aria-pressed="${mode === 'snippets'}">${icon('scissors', 14)}Snippets</button></div>
           <div style="position:relative;width:220px"><input class="app-input" id="boardQ" placeholder="Filter…" value="${S.filters.q}" style="padding-left:32px" spellcheck="false"><span style="position:absolute;left:10px;top:9px;color:var(--text-tertiary)">${icon('search', 14)}</span></div>
         </div>
-        ${mode === 'scenes' ? html`<div class="scenes">${scenes().map(sceneSection)}${scenes().every((s) => !sceneSection(s).toString()) ? emptyScenes() : ''}</div>` : mode === 'folders' ? foldersView() : clipsTable()}`}
-    </div>`;
+        ${mode === 'scenes' ? html`<div class="scenes">${scenes().map(sceneSection)}${scenes().every((s) => !sceneSection(s).toString()) ? emptyScenes() : ''}</div>` : mode === 'folders' ? foldersView() : mode === 'snippets' ? snippetsView() : clipsTable()}`}
+    </div>
+    ${actionBar()}`;
 }
 
 function openShot(sceneId, shotId) {
@@ -255,10 +311,40 @@ export default {
     });
     on(el, 'click', '[data-tick]', (e, box) => { e.stopPropagation(); if (box.checked) ticked.add(box.dataset.tick); else ticked.delete(box.dataset.tick); this.update(); });
     on(el, 'click', '#tickAll', (e, box) => { e.stopPropagation(); const rows = clips().filter((c) => c.kind === 'shot'); if (box.checked) rows.forEach((c) => ticked.add(c.key)); else ticked.clear(); this.update(); });
-    on(el, 'click', '#tickClear', () => { ticked.clear(); this.update(); });
-    on(el, 'click', '#renameTicked', () => openRenameTakes([...ticked], { afterRename: () => ticked.clear() }));
+    on(el, 'click', '#tickClear', () => { ticked.clear(); picked.clear(); this.update(); });
+    on(el, 'click', '[data-expand]', (e, b) => { e.stopPropagation(); const k = b.dataset.expand; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); this.update(); });
+    on(el, 'click', '[data-snipfilter]', (e, b) => { S.filters.snips = b.dataset.snipfilter; this.update(); });
+    on(el, 'click', '[data-open-take]', (e, b) => window.kitGo('review', b.dataset.openTake));
+    // snippet cards: the checkbox selects, anywhere else opens it
+    on(el, 'click', '[data-pick]', (e, box) => { e.stopPropagation(); if (box.checked) picked.add(box.dataset.pick); else picked.delete(box.dataset.pick); this.update(); });
+    on(el, 'click', '[data-pick-many]', (e, box) => { const ids = box.dataset.pickMany.split(' '); ids.forEach((id) => (box.checked ? picked.add(id) : picked.delete(id))); this.update(); });
+    on(el, 'click', '[data-snip]', (e, card) => { if (e.target.closest('.snip-check')) return; openSnippet(card.dataset.snip, card.dataset.n); });
+    el.addEventListener('keydown', (e) => {
+      const card = e.target.closest && e.target.closest('.snip-card');
+      if (!card || e.target !== card) return;
+      if (e.key === 'Enter') { e.preventDefault(); openSnippet(card.dataset.snip, card.dataset.n); }
+      if (e.key === ' ') { e.preventDefault(); const id = `${card.dataset.snip}#${card.dataset.n}`; if (picked.has(id)) picked.delete(id); else picked.add(id); this.update(); const again = root.querySelector(`.snip-card[data-snip="${CSS.escape(card.dataset.snip)}"][data-n="${card.dataset.n}"]`); if (again) again.focus(); }
+    });
+    on(el, 'click', '[data-bulk]', async (e, b) => {
+      const sel = selection();
+      const act = b.dataset.bulk;
+      // in All clips, open the takes being worked on, so their snippets appear where the person is looking
+      const reveal = () => { sel.keys.forEach((k) => expanded.add(k)); this.update(); };
+      if (act === 'cut') { reveal(); cutTakes(sel.keys); }
+      else if (act === 'upload') { reveal(); uploadItems(sel); }
+      else if (act === 'send') { reveal(); sendItems(sel); }
+      else if (act === 'rename') openRenameTakes(sel.keys, { afterRename: () => ticked.clear() });
+      else if (act === 'more') {
+        openMenu(b, [
+          { label: 'Copy LetzAI links', icon: 'copy', onClick: () => copyLinks(sel) },
+          ...(sel.keys.length ? [{ label: 'Copy take names', icon: 'copy', onClick: () => navigator.clipboard.writeText(sel.keys.map((k) => clip(k).name).join('\n')).then(() => toast('Names copied.', { type: 'success' })).catch(toastError) }] : []),
+          { sep: true },
+          { label: sel.keys.length ? 'Delete their snippets…' : 'Delete snippets…', icon: 'trash', onClick: async () => { if (await deleteItems(sel)) { picked.clear(); this.update(); } } },
+        ], { align: 'end' });
+      }
+    });
     on(el, 'click', '[data-act="open-shot"]', (e, c) => openShot(c.dataset.scene, c.dataset.shot));
-    on(el, 'click', '[data-act="open-clip"]', (e, c) => { if (e.target.closest('input')) return; window.kitGo('review', c.dataset.key); });
+    on(el, 'click', '[data-act="open-clip"]', (e, c) => { if (e.target.closest('input, button, a')) return; window.kitGo('review', c.dataset.key); });
     on(el, 'click', '[data-act="open-raw"]', (e, c) => window.kitGo('ingest', c.dataset.key));
     el.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-act]')) { e.preventDefault(); e.target.click(); } });
     el.addEventListener('input', debounce((e) => {
@@ -271,11 +357,19 @@ export default {
   },
   update() {
     if (!root || !S.snap) return;
+    if (!this.unJobs) {
+      let sig = '';
+      this.unJobs = subscribeJobs(() => {
+        if (!root || (S.filters.boardMode !== 'clips' && S.filters.boardMode !== 'snippets')) return;
+        const next = clips().map((c) => busyWith(c.key)).join(',');
+        if (next !== sig) { sig = next; this.update(); }
+      });
+    }
     const sy = root.scrollTop;
     const hadFocus = document.activeElement && document.activeElement.id === 'boardQ';
     mount(root, render());
     root.scrollTop = sy;
     if (hadFocus) { const q = $('#boardQ', root); q.focus(); const l = q.value.length; q.setSelectionRange(l, l); }
   },
-  unmount() { root = null; },
+  unmount() { root = null; if (this.unJobs) { this.unJobs(); this.unJobs = null; } },
 };

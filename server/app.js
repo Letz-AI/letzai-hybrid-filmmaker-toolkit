@@ -14,6 +14,18 @@ const { httpError, natCompare, mapLimit } = require('./lib/util');
 const pkg = require('../package.json');
 
 // Failures that will fail the same way for every remaining snippet: stop instead of repeating them.
+/** [{key, n}] -> [[key, [n…]]], leaving out takes that are handled as a whole anyway. */
+function bySnippetTake(p, snippets, wholeKeys) {
+  const m = new Map();
+  for (const s of snippets || []) {
+    if (!s || !p.byKey.has(s.key) || (wholeKeys || []).includes(s.key)) continue;
+    const n = Number(s.n);
+    if (!Number.isInteger(n)) continue;
+    m.set(s.key, [...new Set([...(m.get(s.key) || []), n])].sort((a, b) => a - b));
+  }
+  return [...m];
+}
+
 const fatalFor = (e) => e && (e.status === 401 || e.status === 402 || e.status === 403 || e.status === 404 || e.code === 'no-scene-page' || /No LetzAI API key/.test(e.message));
 
 class App extends EventEmitter {
@@ -247,10 +259,17 @@ class App extends EventEmitter {
    * cut lane -> upload lane, so cutting the next take overlaps uploading the previous one.
    * Whatever goes wrong is kept on the take (clip.canvasError) until a retry succeeds.
    */
-  sendToCanvas(keys) {
+  sendToCanvas(keys, snippets = []) {
     const p = this.requireProject();
     this.canvasTarget(); // fail fast with a helpful message
     const queued = [];
+    // single snippets: already cut, so straight to the upload lane
+    for (const [key, ns] of bySnippetTake(p, snippets, keys)) {
+      const e = p.entry(key);
+      if (e.kind !== 'shot') continue;
+      p.canvasErrors.delete(key);
+      queued.push(this.jobs.add({ lane: 'upload', title: `Canvas · ${e.name} (${ns.length === 1 ? `snippet ${ns[0]}` : `${ns.length} snippets`})`, dedupeKey: `upload:${key}#${ns.join(',')}`, run: (uctx) => this._uploadCuts(key, uctx, ns) }));
+    }
     for (const key of keys) {
       const e = p.entry(key);
       if (e.kind !== 'shot') continue; // unnamed footage has no scene yet, so it has no place on the canvas
@@ -273,12 +292,65 @@ class App extends EventEmitter {
     return queued;
   }
 
-  async _uploadCuts(key, ctx) {
+  /**
+   * Upload takes to LetzAI as user assets (no canvas): cut first if needed, then upload every snippet that is not
+   * uploaded yet. Each upload is remembered with its snippet, so a later "Send to canvas" reuses it.
+   */
+  uploadToLetzAI(keys, snippets = []) {
+    const p = this.requireProject();
+    if (!cfg.getKey()) throw httpError(400, 'Add your LetzAI API key first (Settings → LetzAI).', { code: 'no-letzai-key' });
+    const queued = [];
+    for (const [key, ns] of bySnippetTake(p, snippets, keys)) {
+      const e = p.entry(key);
+      queued.push(this.jobs.add({ lane: 'upload', title: `LetzAI · ${e.name} (${ns.length === 1 ? `snippet ${ns[0]}` : `${ns.length} snippets`})`, dedupeKey: `asset:${key}#${ns.join(',')}`, run: (uctx) => this._uploadAssets(key, uctx, ns) }));
+    }
+    for (const key of keys) {
+      const e = p.entry(key);
+      queued.push(this.jobs.add({
+        lane: 'cut', title: `Cut · ${e.name}`, dedupeKey: `cut:${e.key}`,
+        run: async (ctx) => {
+          await p.makeCuts(e.key, ctx);
+          const fresh = p.entry(e.key);
+          this.jobs.add({ lane: 'upload', title: `LetzAI · ${fresh.name}`, dedupeKey: `asset:${fresh.key}`, run: (uctx) => this._uploadAssets(fresh.key, uctx) });
+        },
+      }));
+    }
+    return queued;
+  }
+
+  async _uploadAssets(key, ctx, only) {
+    const p = this.requireProject();
+    const e = p.entry(key);
+    const list = only ? e.cutFiles.filter((c) => only.includes(c.n)) : e.cutFiles;
+    if (!list.length) throw httpError(400, `No snippets exist for ${e.name}. Cut it again.`);
+    const failures = [];
+    let uploaded = 0; let already = 0;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (p.assetFor(key, c.n)) { already++; continue; }
+      try {
+        const asset = await this.client.uploadAsset(p.cutPath(e, c.n), (f) => ctx.progress((i + f) / list.length, `Uploading ${i + 1} of ${list.length}`), ctx.signal);
+        p.recordAsset(key, c.n, asset);
+        uploaded++;
+      } catch (err) {
+        if (err.cancelled || ctx.signal.aborted) throw err;
+        failures.push({ file: c.name, message: canvas.explain(err) });
+        if (fatalFor(err)) break;
+      }
+    }
+    await p.scan();
+    if (failures.length) throw httpError(502, `${failures.length} of ${list.length} snippets were not uploaded. ${failures[0].message}`);
+    ctx.progress(1, `${uploaded} uploaded${already ? `, ${already} already there` : ''}`);
+    return { uploaded, already };
+  }
+
+  async _uploadCuts(key, ctx, only) {
     const p = this.requireProject();
     const e = p.entry(key);
     const t = this.canvasTarget();
     const dir = path.join(path.dirname(e.abs), 'cuts');
-    const files = e.cutFiles.map((c) => path.join(dir, c.name));
+    const list = only ? e.cutFiles.filter((c) => only.includes(c.n)) : e.cutFiles;
+    const files = list.map((c) => path.join(dir, c.name));
     const fail = (message, list) => { const err = { message, files: list, at: new Date().toISOString(), phase: 'upload' }; this._setCanvasError(key, err); return new Error(message); };
     if (!files.length) throw fail(`No cuts exist for ${e.name}. Cut it again.`, []);
 
@@ -296,9 +368,10 @@ class App extends EventEmitter {
         if (info.error) throw Object.assign(new Error(info.error), { friendly: `The snippet ${name} can't be read (${info.error}). Cut it again.` });
         const r = await canvas.sendFile(this.client, {
           canvasId: t.canvasId, pageId: pg.id, file: files[i], width: info.width, height: info.height, layout: t.layout, signal: ctx.signal, page,
-          sent: p.state.sent[name],
+          sent: p.state.sent[name], asset: p.assetFor(key, list[i].n),
           onProgress: (f) => ctx.progress((i + f) / files.length, `Uploading ${i + 1} of ${files.length}`),
         });
+        if (r.asset && !r.asset.reused) p.recordAsset(key, list[i].n, r.asset);
         if (r.skipped) skipped++; else uploaded++;
         if (r.replaced) replaced++;
         p.state.sent[name] = { size: r.size, at: new Date().toISOString(), page: pg.id };

@@ -28,7 +28,7 @@ It is made for hybrid films: shoot real footage, sort it quickly, then bring the
 | **Rename** | Fix names later: one take, a whole shot, a whole scene, or any selection. |
 | **Folders** | A film is often several shoot days. Show one folder at a time, and get told when new footage turns up. |
 | **Compare** | Put an AI-generated version of a take next to the original: with a slider, side by side, as a cross-fade, or as a difference view. Both play in sync. |
-| **Canvas** | Cut takes into short snippets (up to 30 seconds) and send them to your LetzAI Canvas, one page for everything or one page per scene. Nothing is sent twice, and failed uploads can be retried. |
+| **Snippets and LetzAI** | Cut takes into short snippets (up to 30 seconds), see them as cards, and upload them to LetzAI or place them on your LetzAI Canvas: whole takes or single snippets. Nothing is uploaded twice, and failed uploads can be retried. |
 
 ## Install
 
@@ -171,6 +171,17 @@ Each clip without a name shows a large frame so you can read the slate. Click it
 Existing names are never overwritten, and one **Undo** reverses the whole batch.
 
 ![Name several clips at once](docs/screenshots/batch-rename.png)
+
+### Snippets: cutting and sending to LetzAI
+
+LetzAI works with short clips, so takes are cut into **snippets** of at most 30 seconds (adjustable in *Canvas*). If you marked in and out points in Review, those ranges are used; otherwise the whole take. The take itself is never changed: snippets are new files in a `cuts` folder next to it.
+
+- **Dashboard → All clips**: tick takes and use the bar at the bottom: **Cut**, **Upload to LetzAI**, **Send to Canvas**, **Rename…**, and under **⋯** copy links or delete snippets. Open a take with the arrow in the *Snippets* column to see its snippets.
+- **Dashboard → Snippets**: every snippet as a card with its frame, length and range, grouped by take. Filter by *Not uploaded*, *Uploaded* or *On canvas*, tick single snippets (or all of a take) and upload or send just those.
+- **Click a snippet** to play it, with buttons to upload it, send it to the canvas, copy its LetzAI link, show it in the folder or delete it.
+- **Review → Canvas** shows the take's snippets as small cards, with buttons to cut and to upload.
+
+*Upload to LetzAI* puts the files into your LetzAI uploads without touching the canvas. *Send to Canvas* also places them on the canvas, and reuses anything you already uploaded. Each snippet shows what happened to it, so nothing is uploaded twice. If you change the in and out points or the snippet length later, the snippets show **outdated**; cutting again replaces them.
 
 ### Renaming takes that already have a name
 

@@ -144,3 +144,15 @@ test('review copies are prepared in the background, unnamed clips first, only fo
 });
 
 test.after(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+test('cutting never leaves a runt snippet at the end: a leftover under a second shares time with the piece before', () => {
+  const plan = (duration, maxSeconds, cutRanges = []) => Project.prototype.planCuts.call({ state: { snippets: { maxSeconds } } }, { duration, cutRanges, stem: 'T', ext: '.mp4' });
+  const lens = (pl) => pl.map((c) => Math.round(c.len * 100) / 100);
+  assert.deepEqual(lens(plan(7, 2)), [1.95, 1.95, 1.95, 1]);        // a full second left: kept as it is
+  assert.deepEqual(lens(plan(4.04, 2)), [1.95, 1.02, 1.02]);       // 0.04 s left: the last two share it
+  const long = plan(60.1, 30);
+  assert.equal(long.length, 3);
+  assert.ok(long.every((c) => c.len <= 30 && c.len > 1));
+  assert.ok(Math.abs(long[2].start + long[2].len - 60.1) < 1e-9, 'nothing at the end is lost');
+  assert.deepEqual(lens(plan(20, 30)), [20]);                       // shorter than the limit: one piece, untouched
+});

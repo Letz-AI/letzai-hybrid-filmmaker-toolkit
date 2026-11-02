@@ -302,7 +302,7 @@ async function applyUpdates(client, canvasId, pageId, updates) {
  *    then the old nodes are removed and the new file is uploaded in their place
  *  - the upload is verified (size on LetzAI) and so are the created nodes; any shortfall throws
  */
-async function sendFile(client, { canvasId, pageId, file, width, height, layout, onProgress, signal, page, sent }) {
+async function sendFile(client, { canvasId, pageId, file, width, height, layout, onProgress, signal, page, sent, asset: known }) {
   const L = { ...DEFAULT_LAYOUT, ...layout };
   const name = path.basename(file);
   const clientNodeId = `ltn:${name}`;
@@ -317,7 +317,16 @@ async function sendFile(client, { canvasId, pageId, file, width, height, layout,
     await client.request('DELETE', `/canvas/${canvasId}/pages/${pageId}/nodes`, { ids: [existing.id, ...(cap ? [cap.id] : [])] });
     replaced = true;
   }
-  const asset = await client.uploadAsset(file, onProgress, signal);
+  // already uploaded with "Upload to LetzAI" (same bytes)? Use that file if LetzAI still serves it, instead of uploading again
+  let asset = null;
+  if (known && known.url && known.size === stat.size) {
+    try {
+      await client.verifyAvailable(known.url, stat.size);
+      const mime = MIME[path.extname(file).slice(1).toLowerCase()] || '';
+      asset = { id: known.id, imageUrl: known.url, size: stat.size, isVideo: mime.startsWith('video/'), reused: true };
+    } catch { asset = null; }
+  }
+  if (!asset) asset = await client.uploadAsset(file, onProgress, signal);
   const W = width || 1920;
   const H = height || 1080;
   const scale = Math.min(L.clipW / W, L.clipH / H);
@@ -339,7 +348,7 @@ async function sendFile(client, { canvasId, pageId, file, width, height, layout,
     if (e.status === 0 || e.status >= 500) {
       const after = await client.getPage(canvasId, pageId).catch(() => null);
       const made = after && (after.nodes || []).find((n) => n.clientNodeId === clientNodeId);
-      if (made) return { nodeId: made.id, skipped: false, replaced, size: stat.size };
+      if (made) return { nodeId: made.id, skipped: false, replaced, size: stat.size, asset };
     }
     throw e;
   }
@@ -352,7 +361,7 @@ async function sendFile(client, { canvasId, pageId, file, width, height, layout,
     // the clip is there but its caption is not: add the caption on its own rather than leaving a bare clip
     await client.request('POST', `/canvas/${canvasId}/pages/${pageId}/nodes/batch`, { nodes: [nodes[0]] }).catch(() => {});
   }
-  return { nodeId: made.id, skipped: false, replaced, size: stat.size };
+  return { nodeId: made.id, skipped: false, replaced, size: stat.size, asset };
 }
 
 /** Create a "Scene N" label (labels mode) so clips of that scene have a home. */

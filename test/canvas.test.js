@@ -216,3 +216,73 @@ test('page per scene: clips go to the page named after the scene; a scene withou
   assert.equal(st.scenePages['6'].found, true);
   assert.equal(st.scenePages['9'].found, false);
 });
+
+test('upload to LetzAI: snippets become user assets once, a canvas send reuses them, cutting again or deleting starts over', { skip }, async () => {
+  const { app, p } = await makeApp('labels');
+  const take = p.library.find((e) => e.scene === '6'); // 7 s in 2 s snippets: 4
+  const posts = () => fake.state.log.filter((l) => l === 'POST /user-assets').length;
+  app.uploadToLetzAI([take.key]);
+  await waitJobs(app);
+  const job = app.jobs.list.find((j) => j.title.startsWith('LetzAI ·'));
+  assert.equal(job.state, 'done', job.error);
+  let shown = p.toClient(p.byKey.get(take.key));
+  assert.equal(shown.cutFiles.length, 4);
+  assert.equal(shown.cutUploaded, 4);
+  assert.ok(shown.cutFiles.every((c) => c.uploaded && /^http/.test(c.uploaded.url) && c.size > 0));
+  assert.equal(fake.count('p2', 'media'), 0, 'uploading puts nothing on the canvas');
+  assert.equal(posts(), 4);
+
+  // asked again: nothing is uploaded twice
+  app.uploadToLetzAI([take.key]);
+  await waitJobs(app);
+  assert.equal(posts(), 4);
+
+  // the canvas uses the files that are already on LetzAI
+  app.sendToCanvas([take.key]);
+  await waitJobs(app);
+  assert.equal(fake.count('p2', 'media'), 4);
+  assert.equal(posts(), 4, 'no second upload for the canvas');
+
+  // other cut settings: the snippets are outdated; cutting again makes new files whose uploads no longer count
+  p.state.snippets.maxSeconds = 3;
+  await p.scan();
+  assert.equal(p.toClient(p.byKey.get(take.key)).cutStale, true);
+  await p.makeCuts(take.key, { progress() {}, signal: new AbortController().signal });
+  shown = p.toClient(p.byKey.get(take.key));
+  assert.deepEqual([shown.cutFiles.length, shown.cutUploaded, shown.cutStale], [3, 0, false]);
+
+  // deleting snippets removes the kit's files, never the take
+  assert.equal(p.deleteCuts(take.key), 3);
+  await p.scan();
+  assert.equal(p.toClient(p.byKey.get(take.key)).cutFiles.length, 0);
+  assert.ok(fs.existsSync(take.abs));
+});
+
+test('single snippets: upload one, send another to the canvas, delete one; each knows where in the take it comes from', { skip }, async () => {
+  const { app, p } = await makeApp('labels');
+  const take = p.library.find((e) => e.scene === '6');
+  await p.makeCuts(take.key, { progress() {}, signal: new AbortController().signal });
+  let shown = p.toClient(p.byKey.get(take.key));
+  assert.deepEqual(shown.cutFiles.map((c) => [c.n, c.start]), [[1, 0], [2, 2], [3, 4], [4, 6]]);
+  assert.ok(shown.cutFiles.every((c) => c.len > 0));
+  const posts = () => fake.state.log.filter((l) => l === 'POST /user-assets').length;
+
+  app.uploadToLetzAI([], [{ key: take.key, n: 2 }]);
+  await waitJobs(app);
+  shown = p.toClient(p.byKey.get(take.key));
+  assert.deepEqual(shown.cutFiles.map((c) => !!c.uploaded), [false, true, false, false]);
+  assert.equal(posts(), 1);
+
+  app.sendToCanvas([], [{ key: take.key, n: 2 }, { key: take.key, n: 3 }]);
+  await waitJobs(app);
+  assert.equal(fake.count('p2', 'media'), 2);
+  assert.equal(posts(), 2, 'snippet 2 reused its upload, only snippet 3 was uploaded');
+  shown = p.toClient(p.byKey.get(take.key));
+  assert.deepEqual(shown.cutFiles.map((c) => c.onCanvas), [false, true, true, false]);
+
+  assert.equal(p.deleteCuts(take.key, [1]), 1);
+  await p.scan();
+  shown = p.toClient(p.byKey.get(take.key));
+  assert.deepEqual(shown.cutFiles.map((c) => c.n), [2, 3, 4]);
+  assert.equal(shown.cutUploaded, 2, 'the other snippets keep their uploads');
+});
