@@ -95,7 +95,7 @@ function renderTop() {
     ${p && proxyLeft() ? html`<button class="app-btn app-btn--sm" id="proxyChip" title="Getting clips ready so they open instantly. Click for details, to pause or to resume.">${S.proxy.prepare ? html`<span class="spinner"></span>` : icon('pause', 14)} <span>${S.proxy.prepare ? `Preparing playback · ${S.proxy.left} left · about ${S.proxy.etaMinutes < 90 ? `${S.proxy.etaMinutes} min` : `${Math.round(S.proxy.etaMinutes / 60)} h`}` : `Playback preparation paused · ${S.proxy.left} left`}</span></button>` : ''}
     ${p && failedSends().length ? html`<a class="app-btn app-btn--sm app-chip--error" href="#/canvas" title="These takes did not reach the canvas. Open Canvas to see why and retry.">${icon('alert', 14)}<span>${failedSends().length} upload${failedSends().length === 1 ? '' : 's'} failed</span></a>` : ''}
     ${p ? html`<button class="app-btn ${jobs.length ? '' : 'faint'}" id="queueBtn" title="Background jobs">${jobs.length ? html`<span class="spinner"></span>` : icon('layers')}<span>${jobs.length ? plural(jobs.length, 'job') : failed ? html`${failed} failed` : 'Queue'}</span></button>` : ''}
-    ${p ? '' : html`<a class="app-icon-btn" href="#/settings" title="Settings" aria-label="Settings">${icon('settings')}</a>`}
+    <a class="app-icon-btn" href="#/settings" title="Settings" aria-label="Settings" aria-pressed="${S.route && S.route.view === 'settings' ? 'true' : 'false'}">${icon('settings')}</a>
     <button class="app-icon-btn" id="themeBtn" title="Switch to ${theme() === 'dark' ? 'light' : 'dark'} theme" aria-label="Switch theme">${icon(theme() === 'dark' ? 'sun' : 'moon')}</button>
     <button class="app-icon-btn" id="helpBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">${icon('keyboard')}</button>`);
 }
@@ -109,8 +109,6 @@ function renderRail() {
   mount($rail, html`
     <div class="rail-label">Film</div>
     ${NAV.slice(0, 5).map((n) => html`<a class="rail-item" href="#/${n.id}" aria-current="${S.route.view === n.id ? 'page' : 'false'}" title="${n.hint}">${icon(n.icon)}<span>${n.label}</span>${counts[n.id] ? html`<span class="count" title="${n.id === 'ingest' ? 'unnamed clips' : 'shots missing'}">${counts[n.id]}</span>` : ''}</a>`)}
-    <div class="rail-label">Project</div>
-    ${NAV.slice(5).map((n) => html`<a class="rail-item" href="#/${n.id}" aria-current="${S.route.view === n.id ? 'page' : 'false'}">${icon(n.icon)}<span>${n.label}</span></a>`)}
     <div class="rail-foot">
       ${S.info.ffmpeg.ok ? '' : html`<a href="#/settings/system" class="app-chip app-chip--warning">${icon('warn', 12)} ffmpeg missing</a>`}
       ${S.info.key.set ? '' : html`<a href="#/settings/account" class="faint">${icon('key', 12)} No LetzAI key yet</a>`}
@@ -228,7 +226,7 @@ function connectEvents() {
 // ---- boot --------------------------------------------------------------------------------------
 subscribe(() => { renderChrome(); show(); });
 subscribeJobs(() => renderTop());
-window.addEventListener('hashchange', () => { route(); renderRail(); });
+window.addEventListener('hashchange', () => { route(); renderChrome(); });
 
 (async function boot() {
   try {

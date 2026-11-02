@@ -101,7 +101,7 @@ Prefer double-clicking? Use **`Start-Kit.bat`** on Windows, **`Start-Kit.command
 
 Update with `git pull` (or download the ZIP again).
 
-*Settings* has two parts: **This film** (name, file names, footage folders, playback) and **Kit** (keys, AI slate reading and budget, appearance, system). The Kit part works before you open a film: use the gear at the top right. To test from a clean start, *Settings → Account and keys → Start from scratch* removes your keys and settings from this computer.
+*Settings* has two parts: **This film** (name, file names, footage folders, playback) and **Kit** (keys, AI slate reading and budget, appearance, system). Open it with the gear at the top right; the Kit part works before you open a film. To test from a clean start, *Settings → Account and keys → Start from scratch* removes your keys and settings from this computer.
 
 To remove the kit, delete its folder. Your footage is not affected. Your settings and API keys are kept in a separate folder: `npm run check` shows where. Delete that too for a clean removal. Each film folder also has one small file, `letzai-kit.json`, with your ratings and notes.
 
