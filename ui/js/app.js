@@ -39,7 +39,6 @@ export function setTheme(t) {
   document.documentElement.setAttribute('data-theme', t === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : t);
   renderTop();
 }
-const theme = () => document.documentElement.getAttribute('data-theme');
 
 // ---- routing ---------------------------------------------------------------------
 export function go(view, ...args) {
@@ -96,8 +95,7 @@ function renderTop() {
     ${p && failedSends().length ? html`<a class="app-btn app-btn--sm app-chip--error" href="#/canvas" title="These takes did not reach the canvas. Open Canvas to see why and retry.">${icon('alert', 14)}<span>${failedSends().length} upload${failedSends().length === 1 ? '' : 's'} failed</span></a>` : ''}
     ${p ? html`<button class="app-btn ${jobs.length ? '' : 'faint'}" id="queueBtn" title="Background jobs">${jobs.length ? html`<span class="spinner"></span>` : icon('layers')}<span>${jobs.length ? plural(jobs.length, 'job') : failed ? html`${failed} failed` : 'Queue'}</span></button>` : ''}
     <a class="app-icon-btn" href="#/settings" title="Settings" aria-label="Settings" aria-pressed="${S.route && S.route.view === 'settings' ? 'true' : 'false'}">${icon('settings')}</a>
-    <button class="app-icon-btn" id="themeBtn" title="Switch to ${theme() === 'dark' ? 'light' : 'dark'} theme" aria-label="Switch theme">${icon(theme() === 'dark' ? 'sun' : 'moon')}</button>
-    <button class="app-icon-btn" id="helpBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">${icon('keyboard')}</button>`);
+`);
 }
 
 function renderRail() {
@@ -110,16 +108,14 @@ function renderRail() {
     <div class="rail-label">Film</div>
     ${NAV.slice(0, 5).map((n) => html`<a class="rail-item" href="#/${n.id}" aria-current="${S.route.view === n.id ? 'page' : 'false'}" title="${n.hint}">${icon(n.icon)}<span>${n.label}</span>${counts[n.id] ? html`<span class="count" title="${n.id === 'ingest' ? 'unnamed clips' : 'shots missing'}">${counts[n.id]}</span>` : ''}</a>`)}
     <div class="rail-foot">
-      ${S.info.ffmpeg.ok ? '' : html`<a href="#/settings/system" class="app-chip app-chip--warning">${icon('warn', 12)} ffmpeg missing</a>`}
-      ${S.info.key.set ? '' : html`<a href="#/settings/account" class="faint">${icon('key', 12)} No LetzAI key yet</a>`}
+      ${S.info.ffmpeg.ok ? '' : html`<a href="#/settings/about" class="app-chip app-chip--warning">${icon('warn', 12)} ffmpeg missing</a>`}
+      ${S.info.key.set ? '' : html`<a href="#/settings/letzai" class="faint">${icon('key', 12)} No LetzAI key yet</a>`}
       <span title="${S.info.project.root}">${S.snap ? plural(S.snap.clips.length, 'clip') : ''}</span>
     </div>`);
 }
 
 function renderChrome() { renderTop(); renderRail(); }
 
-on($top, 'click', '#themeBtn', () => setTheme(theme() === 'dark' ? 'light' : 'dark'));
-on($top, 'click', '#helpBtn', () => openShortcuts());
 on($top, 'click', '#paletteBtn', () => openPalette());
 on($top, 'click', '#queueBtn', (e, el) => openQueue(el));
 on($top, 'click', '#proxyChip', (e, el) => {
@@ -155,16 +151,17 @@ export async function rescan() {
   try { await post('/api/rescan'); toast('Folders rescanned.', { type: 'success' }); } catch (e) { toastError(e); }
 }
 
+/** Every shortcut, by place. Shown with ? anywhere, and in Settings → Keyboard shortcuts. */
+export const SHORTCUTS = [
+  ['Anywhere', [['Ctrl K', 'Jump to a shot, file or action'], ['g then d / r / m / i / c / s', 'Go to Dashboard / Review / Compare / Ingest / Canvas / Settings'], ['?', 'This list']]],
+  ['Review', [['Space or K', 'Play / pause'], ['J / L', 'Slower / faster (press again to speed up)'], ['← / →', 'Step one frame (Shift: one second)'], ['I / O', 'Set cut in / out point'], ['Enter', 'Add cut from in to out'], ['M', 'Drop a marker'], ['1 2 3', 'Rate: void / ok / good'], ['P', 'Mark as the take to use (print)'], ['[ / ]', 'Previous / next take'], ['Shift [ / ]', 'Previous / next shot'], ['C', 'Compare with the next take'], ['T', 'Focus: hide the side panels'], ['S', 'Send this take to the canvas'], ['F', 'Full screen']]],
+  ['Compare', [['Space', 'Play / pause'], ['1 2 3 4', 'Slider / side by side / fade / difference'], ['← / →', 'Step one frame'], ['S', 'Swap sides'], ['[ / ]', 'Previous / next AI result'], ['Shift [ / ]', 'Previous / next take'], ['F', 'Full screen']]],
+  ['Ingest', [['Enter', 'Apply the name and go to the next clip'], ['Tab', 'Move between scene, shot, take'], ['Esc', 'Skip this clip'], ['Ctrl Z', 'Undo the last rename']]],
+];
+export const shortcutList = (groups = SHORTCUTS) => html`${groups.map(([h, items]) => html`<div class="section-label">${h}</div><div class="surface pad shortcut-list">${items.map(([k, d]) => html`<div class="row"><span class="sc-keys"><span class="kbd">${k}</span></span><span class="muted">${d}</span></div>`)}</div>`)}`;
+
 function openShortcuts() {
-  const rows = [
-    ['Global', [['Ctrl K', 'Jump to a shot or action'], ['g then d / r / m / i / c / s', 'Go to Dashboard / Review / Compare / Ingest / Canvas / Settings'], ['?', 'This list']]],
-    ['Review', [['Space or K', 'Play / pause'], ['J / L', 'Slower / faster (press again to speed up)'], ['← / →', 'Step one frame (Shift: one second)'], ['I / O', 'Set cut in / out point'], ['Enter', 'Add cut from in to out'], ['M', 'Drop a marker'], ['1 2 3', 'Rate: void / ok / good'], ['P', 'Print (circle) this take'], ['[ / ]', 'Previous / next take'], ['Shift [ / ]', 'Previous / next shot'], ['C', 'Compare with the next take'], ['T', 'Focus: hide the side panels'], ['S', 'Send this take to the canvas']]],
-    ['Ingest', [['Enter', 'Apply the name and go to the next clip'], ['Tab', 'Move between scene, shot, take'], ['Esc', 'Skip this clip'], ['Ctrl Z', 'Undo the last rename']]],
-  ];
-  openPopup({
-    title: 'Keyboard shortcuts', width: 640,
-    body: html`${rows.map(([h, items]) => html`<div class="section-label" style="margin-top:0">${h}</div><div style="display:grid;gap:6px;margin-bottom:20px">${items.map(([k, d]) => html`<div class="row"><span class="kbd" style="min-width:0">${k}</span><span class="muted">${d}</span></div>`)}</div>`)}`,
-  });
+  openPopup({ title: 'Keyboard shortcuts', subtitle: 'On a Mac, use Cmd instead of Ctrl.', width: 640, className: 'shortcuts-popup', body: shortcutList() });
 }
 
 // ---- keyboard ------------------------------------------------------------------------

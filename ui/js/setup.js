@@ -119,7 +119,7 @@ export async function openSetup({ onDone } = {}) {
     const line = (ok, title, on, off) => html`<div class="row" style="gap:12px;align-items:flex-start"><span style="color:${ok ? 'var(--color-success)' : 'var(--text-tertiary)'}">${icon(ok ? 'checkCircle' : 'info')}</span><div><b>${title}</b><div class="muted">${ok ? on : off}</div></div></div>`;
     mount(p.body, html`<div style="display:grid;gap:14px">
       <b>You’re ready</b>
-      ${line(lz, 'LetzAI Canvas', 'Sending takes to your canvas is available.', 'Unavailable until you add a LetzAI key in Settings → Account and keys.')}
+      ${line(lz, 'LetzAI Canvas', 'Sending takes to your canvas is available.', 'Unavailable until you add a LetzAI key in Settings → LetzAI.')}
       ${line(aiOn, 'AI slate reading', `${S.info.vision.label} will read your slates.`, 'Unavailable until you add an AI key in Settings → AI slate reading.')}
       ${S.info.project ? '' : html`<p class="faint" style="margin:0">Next, choose the folder with your footage.</p>`}</div>`);
     footer(html`<span class="grow"></span><button class="app-btn app-btn--primary" data-done>${S.info.project ? 'Done' : 'Choose film folder'}</button>`);

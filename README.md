@@ -101,7 +101,7 @@ Prefer double-clicking? Use **`Start-Kit.bat`** on Windows, **`Start-Kit.command
 
 Update with `git pull` (or download the ZIP again).
 
-*Settings* has two parts: **This film** (name, file names, footage folders, playback) and **Kit** (keys, AI slate reading and budget, appearance, system). Open it with the gear at the top right; the Kit part works before you open a film. To test from a clean start, *Settings → Account and keys → Start from scratch* removes your keys and settings from this computer.
+*Settings* has two parts: **This film** (name, file names, footage folders, playback) and **Kit** (LetzAI key, AI slate reading with its key and budget, appearance, keyboard shortcuts). Open it with the gear at the top right; the Kit part works before you open a film. To test from a clean start, *Settings → Setup and reset → Start from scratch* removes your keys and settings from this computer.
 
 To remove the kit, delete its folder. Your footage is not affected. Your settings and API keys are kept in a separate folder: `npm run check` shows where. Delete that too for a clean removal. Each film folder also has one small file, `letzai-kit.json`, with your ratings and notes.
 
@@ -270,7 +270,7 @@ On a Mac, use `Cmd` instead of `Ctrl`.
 
 ## Sending to a LetzAI Canvas
 
-The kit uses the LetzAI API with your own key. Get a key at [letz.ai/subscription](https://letz.ai/subscription), paste it into *Settings → Account and keys* (or *Canvas*), then choose your canvas in *Canvas*.
+The kit uses the LetzAI API with your own key. Get a key at [letz.ai/subscription](https://letz.ai/subscription), paste it into *Settings → LetzAI* (or *Canvas*), then choose your canvas in *Canvas*.
 
 - **One page or one page per scene.** On *one page*, each scene gets a heading. With *page per scene*, each scene goes to its own page (`Scene 6`, `Scene 14`, …). The LetzAI API cannot create pages, so if a scene has no page yet, the kit tells you which page to add.
 - **What is uploaded.** Only the snippets you send, up to 30 seconds each, scaled down to 1080p by default.
@@ -309,7 +309,7 @@ API keys can also come from environment variables: `LETZAI_API_KEY`, `ANTHROPIC_
 | **A rename says a file is in use** | Dropbox, OneDrive or another program is reading it. Nothing was changed. Wait until syncing has finished and try again. |
 | **The AI key is not accepted, or there is no credit** | Check the key in *Settings → AI slate reading*. Most AI companies need some prepaid credit on the account. |
 | **"Monthly budget used up"** | Raise the budget in *Settings → AI slate reading*, or wait until next month. |
-| **A button is greyed out** | It needs a key you haven't added yet: the LetzAI key for anything with the canvas, an AI key for slate reading. *Settings → Account and keys* adds both. |
+| **A button is greyed out** | It needs a key you haven't added yet: the LetzAI key for anything with the canvas, an AI key for slate reading. *Settings → Setup and reset → Setup assistant* adds both. |
 | **An upload failed** | Open *Canvas*: the take shows the reason, and *Retry* sends what is missing. "Scene N has no page" means you need to add a page with that name in LetzAI. |
 | **It opens in a browser tab, not a window** | That's fine, it works the same. The kit uses your normal browser when it can't find Chrome, Edge or Brave. |
 | **Port already in use** | `npm start -- --port 5000` |

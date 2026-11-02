@@ -251,7 +251,7 @@ function renderInspector() {
       <div class="row">${S.info.key.set ? html`<button class="app-btn app-btn--primary grow" id="sendCanvas">${icon('canvas')}<span>${!connected ? 'Connect canvas' : c.canvasError ? 'Retry send' : 'Send to canvas'}</span><span class="kbd">S</span></button>`
         : html`<button class="app-btn grow" disabled title="Needs a LetzAI API key">${icon('canvas')}<span>Send to canvas</span></button>`}
         <button class="app-btn" id="cutOnly" title="Cut the snippets without uploading">${icon('scissors')}<span>Cut only</span></button></div>
-      ${S.info.key.set ? '' : html`<div class="faint" style="font-size:12px;margin-top:6px">Sending needs your LetzAI API key. <a href="#/settings/account">Add it in Settings</a>.</div>`}
+      ${S.info.key.set ? '' : html`<div class="faint" style="font-size:12px;margin-top:6px">Sending needs your LetzAI API key. <a href="#/settings/letzai">Add it in Settings</a>.</div>`}
     </div>` : ''}
 
     <details class="insp-sec insp-fold" id="fileFold" ${fileOpen ? 'open' : ''}>
@@ -505,7 +505,7 @@ function dropMarker() {
 async function sendToCanvas() {
   const c = cur();
   if (!c || c.kind !== 'shot') return;
-  if (!S.info.key.set) { toast('Sending to a canvas needs your LetzAI API key.', { link: { text: 'Add it', onClick: () => window.kitGo('settings', 'account') } }); return; }
+  if (!S.info.key.set) { toast('Sending to a canvas needs your LetzAI API key.', { link: { text: 'Add it', onClick: () => window.kitGo('settings', 'letzai') } }); return; }
   if (!S.info.project.canvas.canvasId) { window.kitGo('canvas'); return; }
   try { await post('/api/canvas/send', { keys: [c.key] }); toast(`Cutting and uploading ${c.scene}.${c.shot} take ${c.take}…`, { type: 'success' }); } catch (e) { toastError(e); }
 }

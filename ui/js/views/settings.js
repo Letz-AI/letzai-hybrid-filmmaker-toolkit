@@ -1,6 +1,6 @@
 // Settings, in two groups: "This film" (name and naming, footage folders, playback; needs an open film) and "Kit"
-// (keys, AI slate reading and its budget, appearance, system, starting from scratch; works without a film).
-// Each item is its own page: #/settings/<section>.
+// (works without a film). Each feature owns its key: the LetzAI key is on the LetzAI page, the AI key on the AI slate
+// reading page. Each item is its own page: #/settings/<section>.
 import { html, icon, mount, on, plural, debounce } from '../lib.js';
 import { get, post, put, patch } from '../api.js';
 import { providerPicker, currentProvider, money } from '../slate.js';
@@ -8,18 +8,20 @@ import { openSetup } from '../setup.js';
 import { S, loadInfo, clips, folders } from '../store.js';
 import { toast, toastError, confirmDialog, field } from '../ui.js';
 import { openRenameAll } from '../renameall.js';
-import { setTheme } from '../app.js';
+import { setTheme, shortcutList } from '../app.js';
 
 const SECTIONS = [
   { id: 'film', group: 'film', label: 'Film', icon: 'review', title: 'Film', sub: 'Name, file names and the project file.' },
   { id: 'footage', group: 'film', label: 'Footage', icon: 'folder', title: 'Footage', sub: 'The folders the kit looks at for this film.' },
   { id: 'playback', group: 'film', label: 'Playback', icon: 'play', title: 'Playback', sub: 'Playable copies of camera files your browser cannot show.' },
-  { id: 'account', group: 'kit', label: 'Account and keys', icon: 'key', title: 'Account and keys', sub: 'Your API keys, stored only on this computer.' },
+  { id: 'letzai', group: 'kit', label: 'LetzAI', icon: 'canvas', title: 'LetzAI', sub: 'Your LetzAI API key, for sending takes to a LetzAI Canvas. Stored only on this computer.' },
   { id: 'ai', group: 'kit', label: 'AI slate reading', icon: 'bolt', title: 'AI slate reading', sub: 'An AI reads the slate on each clip and suggests its name, with your own API key.' },
   { id: 'appearance', group: 'kit', label: 'Appearance', icon: 'sun', title: 'Appearance', sub: '' },
-  { id: 'system', group: 'kit', label: 'System', icon: 'settings', title: 'System', sub: 'What the kit found on this computer.' },
-  { id: 'about', group: 'kit', label: 'About', icon: 'info', title: 'About', sub: '' },
+  { id: 'keyboard', group: 'kit', label: 'Keyboard shortcuts', icon: 'keyboard', title: 'Keyboard shortcuts', sub: 'Press ? anywhere to see this list. On a Mac, use Cmd instead of Ctrl.' },
+  { id: 'about', group: 'kit', label: 'About and system', icon: 'info', title: 'About and system', sub: '' },
+  { id: 'reset', group: 'kit', label: 'Setup and reset', icon: 'regenerate', title: 'Setup and reset', sub: '' },
 ];
+const ALIASES = { account: 'letzai', system: 'about' };   // older links
 const LETZAI_KEYS = 'https://letz.ai/subscription';
 
 let root;
@@ -38,7 +40,11 @@ let lzEditing = false;
 const proj = () => S.info.project;
 const theme = () => { try { return localStorage.getItem('theme') || 'dark'; } catch { return 'dark'; } };
 // a film section asked for without an open film shows the account page
-const current = () => { const s = SECTIONS.find((x) => x.id === section) || SECTIONS.find((x) => x.id === (proj() ? 'film' : 'account')); return s.group === 'film' && !proj() ? SECTIONS.find((x) => x.id === 'account') : s; };
+const current = () => {
+  const id = ALIASES[section] || section;
+  const s = SECTIONS.find((x) => x.id === id) || SECTIONS.find((x) => x.id === (proj() ? 'film' : 'letzai'));
+  return s.group === 'film' && !proj() ? SECTIONS.find((x) => x.id === 'letzai') : s;
+};
 
 const saved = debounce(() => toast('Saved.', { timeout: 1200 }), 500);
 async function save(body) {
@@ -88,18 +94,20 @@ function playbackPage(p) {
 }
 
 // ---- Kit --------------------------------------------------------------------------------------------------------
-function accountPage() {
+function letzaiPage() {
   const k = S.info.key;
-  const ai = S.info.vision || {};
   return html`
-    ${card('LetzAI', html`
+    ${card('', html`
       <div class="app-field"><label for="sLzKey">LetzAI API key</label>
         ${k.set && !lzEditing ? html`<div class="row" style="gap:8px">${savedChip(k.source === 'environment' ? 'LETZAI_API_KEY' : '')}<span class="grow"></span>${k.source === 'file' ? html`<button class="app-btn app-btn--sm" id="lzReplace">Replace</button><button class="app-btn app-btn--sm" id="lzRemove">${icon('trash', 14)}<span>Remove key</span></button>` : ''}</div>`
           : html`<div class="row" style="gap:8px"><input class="app-input" id="sLzKey" type="password" placeholder="Paste your key" autocomplete="off" spellcheck="false"><button class="app-btn app-btn--primary" id="lzSave" style="flex:none">${lzBusy ? 'Checking…' : 'Save'}</button>${lzEditing ? html`<button class="app-btn" id="lzCancel" style="flex:none">Cancel</button>` : ''}</div>
             <div class="app-hint">Get your key at <a href="${LETZAI_KEYS}" target="_blank" rel="noopener">letz.ai/subscription</a>. Needed to send takes to a LetzAI Canvas.</div>`}
-        ${alertMsg(lzMsg)}</div>`)}
-    ${card('AI', html`<div class="row" style="gap:12px"><div class="grow"><b>${ai.keySet ? `${ai.label} key saved` : 'No AI key yet'}</b><div class="faint">${ai.keySet ? 'Used to read slates.' : 'Add a Claude, ChatGPT or Gemini key to let an AI read slates.'}</div></div><a class="app-btn app-btn--sm" href="#/settings/ai">${ai.keySet ? 'Manage' : 'Add a key'}</a></div>`)}
-    ${card('Setup', html`<div class="row" style="gap:12px"><div class="grow"><b>Setup assistant</b><div class="faint">The short walk-through from the first start: both keys, step by step.</div></div><button class="app-btn app-btn--sm" id="setupAgain">${icon('key', 14)}<span>Open</span></button></div>`)}
+        ${alertMsg(lzMsg)}</div>`)}`;
+}
+
+function resetPage() {
+  return html`
+    ${card('', html`<div class="row" style="gap:12px"><div class="grow"><b>Setup assistant</b><div class="faint">The short walk-through from the first start: the LetzAI key and an AI key, step by step.</div></div><button class="app-btn app-btn--sm" id="setupAgain">${icon('key', 14)}<span>Open</span></button></div>`)}
     <div class="section-label">Start from scratch</div>
     <div class="surface pad danger-card"><div class="row" style="gap:12px;align-items:flex-start"><div class="grow"><b>Reset the kit on this computer</b><div class="faint">Removes your LetzAI and AI keys, your settings, the list of recent films and the spending count, as on a first start. Film folders, footage, ratings and notes are not touched.</div></div><button class="app-btn app-btn--sm app-btn--danger" id="resetAll">${icon('trash', 14)}<span>Reset…</span></button></div></div>`;
 }
@@ -131,9 +139,11 @@ function appearancePage() {
   return card('', html`<div class="app-field"><div class="label">Theme</div><div class="app-segmented" role="radiogroup" style="width:max-content">${[['dark', 'Dark', 'moon'], ['light', 'Light', 'sun'], ['system', 'Match system', 'settings']].map(([id, l, ic]) => html`<button role="radio" aria-checked="${theme() === id}" data-theme-pick="${id}">${icon(ic, 14)}${l}</button>`)}</div></div>`);
 }
 
-function systemPage() {
+function aboutPage() {
   return html`
-    ${card('', html`
+    ${card('', html`<div><b>${S.info.app.name}</b> <span class="faint">version ${S.info.app.version} · MIT license</span></div>
+      <div class="row wrap"><a class="app-btn app-btn--sm" href="https://letz.ai/docs/api" target="_blank" rel="noopener">${icon('external', 14)}<span>LetzAI API docs</span></a><a class="app-btn app-btn--sm" href="https://www.letz.ai/brandguidelines" target="_blank" rel="noopener">${icon('external', 14)}<span>Brand guidelines</span></a><a class="app-btn app-btn--sm" href="https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit" target="_blank" rel="noopener">${icon('external', 14)}<span>Source code</span></a></div>`)}
+    ${card('This computer', html`
       ${check(S.info.ffmpeg.ok, 'ffmpeg', S.info.ffmpeg.ok ? html`${S.info.ffmpeg.version}<br><span class="faint tnum">${S.info.ffmpeg.path}</span>` : 'Not found. Install it and restart the kit.')}
       ${check(!!(doctor && doctor.encoder), 'Video encoder', doctor ? (!doctor.encoder ? 'None found.' : doctor.encoder === 'libx264' ? 'Processor (x264). Cutting 4K is slow.' : `Graphics card (${doctor.encoder})`) : html`<span class="row"><span class="spinner"></span> Testing…</span>`)}
       ${check(S.hevc, 'HEVC playback', S.hevc ? 'Camera files play directly.' : 'Not in this browser, so playable copies are made.')}`, 'setup-list')}
@@ -142,12 +152,7 @@ function systemPage() {
       <div class="row"><div class="grow"><b>Cache</b><div class="faint tnum">${doctor ? doctor.dirs.cache : '…'}</div><div class="faint">Playable copies and thumbnails. Safe to delete; they are made again when needed.</div></div></div>`, 'data-list')}`;
 }
 
-function aboutPage() {
-  return card('', html`<div><b>${S.info.app.name}</b> <span class="faint">version ${S.info.app.version} · MIT license</span></div>
-    <div class="row wrap"><a class="app-btn app-btn--sm" href="https://letz.ai/docs/api" target="_blank" rel="noopener">${icon('external', 14)}<span>LetzAI API docs</span></a><a class="app-btn app-btn--sm" href="https://www.letz.ai/brandguidelines" target="_blank" rel="noopener">${icon('external', 14)}<span>Brand guidelines</span></a><a class="app-btn app-btn--sm" href="https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit" target="_blank" rel="noopener">${icon('external', 14)}<span>Source code</span></a></div>`);
-}
-
-const PAGES = { film: filmPage, footage: footagePage, playback: playbackPage, account: accountPage, ai: aiPage, appearance: appearancePage, system: systemPage, about: aboutPage };
+const PAGES = { film: filmPage, footage: footagePage, playback: playbackPage, letzai: letzaiPage, ai: aiPage, appearance: appearancePage, keyboard: () => shortcutList(), about: aboutPage, reset: resetPage };
 
 function draw() {
   if (!root || !S.info) return;

@@ -203,6 +203,9 @@ input[type="range"] { accent-color: var(--color); height: 28px; }
 .settings-body .muted, .settings-body .faint { overflow-wrap: anywhere; }
 .settings-body > .surface:first-of-type, .settings-body > .settings-sub + .surface, .settings-body > .settings-title + .surface { margin-top: var(--space-6); }
 .settings-body .section-label { margin-top: var(--space-6); }
+.shortcut-list { display: grid; gap: 8px; }
+.shortcut-list .sc-keys { flex: 0 0 170px; }
+.shortcuts-popup .section-label:first-child { margin-top: 0; }
 .danger-card { border-color: color-mix(in srgb, var(--color-error) 35%, transparent); }
 @media (max-width: 900px) {
   .settings-layout { grid-template-columns: 1fr; gap: var(--space-6); }
