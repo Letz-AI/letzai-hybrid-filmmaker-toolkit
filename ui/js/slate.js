@@ -50,8 +50,8 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
   // 1. no key yet
   function stepSetup(msg) {
     mount(p.body, html`<div style="display:grid;gap:14px">
-      <p class="muted" style="margin:0">Claude can read the slate (the <i>Klappe</i>) on each clip and suggest its scene, shot and take. It uses <b>your own</b> Anthropic API key, and the kit sends a few frames from each clip straight to Anthropic. Nothing is renamed until you say so.</p>
-      ${field('Anthropic API key', html`<input class="app-input" id="slKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">`, html`Create one in the <a href="${CONSOLE_KEYS}" target="_blank" rel="noopener">Anthropic Console</a>; the account needs some credit. The key is saved only on this computer, in a file only you can read.`)}
+      <p class="muted" style="margin:0">Claude reads each slate and suggests a name, using your own Anthropic key. Nothing is renamed until you confirm.</p>
+      ${field('Anthropic API key', html`<input class="app-input" id="slKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">`, html`Get one in the <a href="${CONSOLE_KEYS}" target="_blank" rel="noopener">Anthropic Console</a>.`)}
       <div id="slErr">${msg ? alertBox(msg) : ''}</div></div>`);
     mount(p.foot, html`<button class="app-btn" data-no>Cancel</button><button class="app-btn app-btn--primary" id="slSave">Save and test key</button>`);
     p.foot.querySelector('[data-no]').addEventListener('click', p.close);
@@ -77,7 +77,7 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
         <div class="muted">${est.clips ? `About ${plural(est.frames, 'frame')} and ${Math.round(est.inputTokens / 1000)}k input tokens in all. Your Anthropic usage page shows the exact cost.` : 'Every clip here was read already.'}</div></div>
       ${est.skipped || again ? html`<label class="app-switch"><input type="checkbox" id="slAgain" ${again ? 'checked' : ''}><span>Read clips again that were read before${est.skipped ? html`<br><span class="faint">${plural(est.skipped, 'clip')} already ${est.skipped === 1 ? 'has' : 'have'} a reading and would be skipped.</span>` : ''}</span></label>` : ''}
       ${field('Model', html`<select class="app-input" id="slModel">${v.models.map((m) => html`<option value="${m.id}" ${m.id === v.model ? 'selected' : ''}>${m.label}</option>`)}</select>`, html`<span id="slModelNote">${modelNote(v.model)}</span>`)}
-      <label class="app-switch"><input type="checkbox" id="slConsent" ${v.consent ? 'checked' : ''}><span>Send frames from my clips to Anthropic<br><span class="faint">Up to six pictures from the start of each clip (more only if no slate is found there), sent to api.anthropic.com with your key. File names are not sent. Anthropic’s own terms apply to what you send.</span></span></label>
+      <label class="app-switch"><input type="checkbox" id="slConsent" ${v.consent ? 'checked' : ''}><span>Send frames from my clips to Anthropic<br><span class="faint">A few frames per clip. File names are not sent.</span></span></label>
       <div id="slErr"></div></div>`);
     mount(p.foot, html`${hasReadings(keys) ? html`<button class="app-btn" id="slSee">Review earlier readings</button>` : ''}<span class="grow"></span><button class="app-btn" data-no>Cancel</button><button class="app-btn app-btn--primary" id="slGo">${est.clips ? `Read ${plural(est.clips, 'clip')}` : 'Nothing to read'}</button>`);
     const go = p.foot.querySelector('#slGo');
@@ -109,7 +109,7 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
   function stepRunning(jobId) {
     watching = jobId;
     mount(p.body, html`<div style="display:grid;gap:12px;padding:8px 0"><div class="row"><span class="spinner"></span><b id="slTitle">Reading slates…</b></div><div class="bar"><i id="slBar" style="width:0%"></i></div><div class="muted" id="slDetail"></div>
-      <div class="faint" style="font-size:12px">You can close this and keep working. The readings are saved as they arrive, and you will get a message when it is done.</div></div>`);
+      <div class="faint" style="font-size:12px">You can close this and keep working.</div></div>`);
     mount(p.foot, html`<button class="app-btn" id="slStop">Stop</button><span class="grow"></span><button class="app-btn app-btn--primary" id="slBg">Keep working</button>`);
     p.foot.querySelector('#slStop').addEventListener('click', () => post('/api/jobs/cancel', { id: jobId }).catch(toastError));
     p.foot.querySelector('#slBg').addEventListener('click', p.close);
@@ -148,7 +148,7 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
           <span style="min-width:0"><span class="app-chip xs ${r.s.confidence >= 0.85 && !r.s.flags.length ? 'app-chip--success' : 'app-chip--warning'}">${pct(r.s.confidence)}</span>${r.s.flags.map((f) => html`<div style="font-size:11px;color:var(--color-warning)">${FLAG_TEXT[f] || f}</div>`)}</span></div>`; })}</div>` : ''}
         ${matching.length ? html`<div><button class="app-btn app-btn--sm" id="slMatch">${icon(showMatching ? 'chevronUp' : 'chevronDown', 14)}<span>${showMatching ? 'Hide' : 'Show'} the ${plural(matching.length, 'take')} that match</span></button>
           ${showMatching ? html`<div class="rename-list" style="margin-top:8px;max-height:220px">${matching.map((r) => html`<div class="slate-row slate-ok"><span class="app-chip app-chip--success xs">${icon('check', 12)}</span><span class="mono-name">${r.c.name}</span><span class="faint">${r.s.evidence}</span><span class="faint">${pct(r.s.confidence)}</span></div>`)}</div>` : ''}</div>` : ''}
-        ${unreadable.length ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>${plural(unreadable.length, 'clip')} without a readable slate</b>These need a human look: ${unreadable.slice(0, 6).map((r) => html`<a href="#" data-unread="${r.k}">${r.c.orig || r.c.name}</a>`).reduce((a, x) => (a.length ? [...a, ', ', x] : [x]), [])}${unreadable.length > 6 ? ` and ${unreadable.length - 6} more` : ''}. Claude never guesses a number it cannot read.</div></div>` : ''}
+        ${unreadable.length ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>${plural(unreadable.length, 'clip')} without a readable slate</b>Check these yourself: ${unreadable.slice(0, 6).map((r) => html`<a href="#" data-unread="${r.k}">${r.c.orig || r.c.name}</a>`).reduce((a, x) => (a.length ? [...a, ', ', x] : [x]), [])}${unreadable.length > 6 ? ` and ${unreadable.length - 6} more` : ''}.</div></div>` : ''}
         ${!rows.length ? html`<div class="faint">Nothing to show.</div>` : ''}
       </div>`);
       const n = [...state.values()].filter((s) => s.on).length;

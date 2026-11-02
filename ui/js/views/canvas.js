@@ -13,6 +13,7 @@ let loading = false;
 let filter = 'printed';   // printed | all | todo | failed
 const selected = new Set();
 let keyEditing = false;
+let foldOpen = false;      // "Cutting options" unfolded (kept across redraws)
 
 const proj = () => S.info.project;
 const perScene = () => proj().canvas.mode === 'pages';
@@ -32,12 +33,11 @@ async function setMode(mode) {
 
 function statusBlock() {
   const c = proj().canvas;
-  if (!S.info.key.set) return html`<div class="app-alert">${icon('key')}<div class="grow"><b>Add your LetzAI API key</b>The kit uploads with your own key. It is stored on this computer only, never in the film folder.</div></div>`;
-  if (!c.canvasId) return html`<div class="app-alert">${icon('canvas')}<div class="grow"><b>Choose a canvas</b>Pick the canvas your takes should land on.</div></div>`;
+  if (!S.info.key.set || !c.canvasId) return '';
   if (loading && !status) return html`<div class="row faint"><span class="spinner"></span> Checking the canvas…</div>`;
   if (!status) return '';
   if (status.state === 'error') return html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow"><b>Can’t reach the canvas</b>${status.error}</div><button class="app-btn app-btn--sm" id="retry">Try again</button></div>`;
-  if (status.state === 'ok') return html`<div class="row wrap" style="gap:10px"><span class="app-chip app-chip--success">${icon('check', 12)} Connected</span><span class="muted tnum">${status.nodeCount.toLocaleString()} nodes ${perScene() ? 'on the scene pages' : 'on the page'} · ${plural(status.onCanvas, 'clip')} from this kit</span><span class="grow"></span><a class="app-btn app-btn--sm" href="${canvasUrl()}" target="_blank" rel="noopener">${icon('external', 14)}<span>Open canvas</span></a><button class="app-btn app-btn--sm" id="retry" title="Check again">${icon('regenerate', 14)}</button></div>`;
+  if (status.state === 'ok') return html`<div class="row wrap" style="gap:10px"><span class="app-chip app-chip--success">${icon('check', 12)} Connected</span><span class="muted tnum">${plural(status.onCanvas, 'clip')} from this kit</span><span class="grow"></span><a class="app-btn app-btn--sm" href="${canvasUrl()}" target="_blank" rel="noopener">${icon('external', 14)}<span>Open canvas</span></a><button class="app-btn app-btn--sm" id="retry" title="Check again">${icon('regenerate', 14)}</button></div>`;
   return '';
 }
 
@@ -49,20 +49,20 @@ function connectionCard() {
       <div class="conn-row">
         <div class="step-n">1</div>
         <div class="grow"><div class="surface-title">API key</div>
-          ${key.set && !keyEditing ? html`<div class="muted">Saved on this computer${key.source === 'environment' ? ' (from the LETZAI_API_KEY environment variable)' : ''}.</div>` : html`<div class="row" style="margin-top:8px;max-width:520px"><input class="app-input" id="keyInput" type="password" placeholder="Paste your key" autocomplete="off" spellcheck="false"><button class="app-btn app-btn--primary" id="saveKey">Save</button>${keyEditing ? html`<button class="app-btn" id="cancelKey">Cancel</button>` : ''}</div><div class="app-hint" style="margin-top:6px">Get one at <a href="https://letz.ai/subscription" target="_blank" rel="noopener">letz.ai/subscription</a>.</div>`}
+          ${key.set && !keyEditing ? html`<div class="muted">Saved${key.source === 'environment' ? ' (LETZAI_API_KEY)' : ''}</div>` : html`<div class="row" style="margin-top:8px;max-width:520px"><input class="app-input" id="keyInput" type="password" placeholder="Paste your key" autocomplete="off" spellcheck="false"><button class="app-btn app-btn--primary" id="saveKey">Save</button>${keyEditing ? html`<button class="app-btn" id="cancelKey">Cancel</button>` : ''}</div><div class="app-hint" style="margin-top:6px">Get one at <a href="https://letz.ai/subscription" target="_blank" rel="noopener">letz.ai/subscription</a>.</div>`}
         </div>
         ${key.set && !keyEditing ? html`<button class="app-btn app-btn--sm" id="editKey">Replace</button>${key.source === 'file' ? html`<button class="app-btn app-btn--sm app-btn--danger" id="removeKey">Remove</button>` : ''}` : ''}
       </div>
       <div class="conn-row">
         <div class="step-n">2</div>
         <div class="grow"><div class="surface-title">Canvas</div>
-          <div class="muted">${c.canvasId ? html`<b style="color:var(--color)">${c.canvasName || c.canvasId}</b>${!perScene() && c.pageName ? html` · ${c.pageName}` : ''}` : 'Not chosen yet.'}</div></div>
+          <div class="muted">${c.canvasId ? html`<b style="color:var(--color)">${c.canvasName || c.canvasId}</b>${!perScene() && c.pageName ? html` · ${c.pageName}` : ''}` : 'Not chosen yet'}</div></div>
         <button class="app-btn app-btn--sm ${c.canvasId ? '' : 'app-btn--outline'}" id="pickCanvas" ${key.set ? '' : 'disabled'}>${c.canvasId ? 'Change' : 'Choose canvas…'}</button>
       </div>
       <div class="conn-row">
         <div class="step-n">3</div>
         <div class="grow"><div class="surface-title">Where clips go</div>
-          <div class="muted">${perScene() ? 'Each scene goes to the page named after it (Scene 6, Scene 14…), in a grid below what is already there.' : 'All scenes go to one page, each under a text node called “Scene N”.'}</div></div>
+          <div class="muted">${perScene() ? 'Each scene on its own page, named “Scene N”' : 'One page, each scene under a “Scene N” label'}</div></div>
         <div class="app-segmented" role="radiogroup" aria-label="Where clips go"><button role="radio" aria-checked="${!perScene()}" data-mode-pick="labels">One page</button><button role="radio" aria-checked="${perScene()}" data-mode-pick="pages">Page per scene</button></div>
       </div>
       <div class="conn-status">${statusBlock()}${suggestion()}</div>
@@ -71,7 +71,7 @@ function connectionCard() {
 
 function suggestion() {
   if (!status || status.state !== 'ok' || perScene() || !status.suggestPages) return '';
-  return html`<div class="app-alert" style="margin-top:12px">${icon('info')}<div class="grow"><b>This canvas has a page for each scene</b>Pages like “Scene 6” exist. Send each scene to its own page instead of one page?</div><button class="app-btn app-btn--sm" data-mode-pick="pages">Use a page per scene</button></div>`;
+  return html`<div class="app-alert" style="margin-top:12px">${icon('info')}<div class="grow"><b>This canvas has a page per scene</b></div><button class="app-btn app-btn--sm" data-mode-pick="pages">Use a page per scene</button></div>`;
 }
 
 function destinations() {
@@ -84,14 +84,13 @@ function destinations() {
       <div class="section-label">Scene pages</div>
       <div class="surface pad">
         <div class="row wrap" style="gap:8px">${sc.map((s) => { const p = status.scenePages[s.id]; return html`<span class="app-chip ${p && p.found ? 'app-chip--success' : 'app-chip--warning'}" title="${p && p.found ? p.name : 'No page named Scene ' + s.id}">${icon(p && p.found ? 'check' : 'dashed', 12)} Scene ${s.id}${p && p.found ? html` <span class="faint">→ ${p.name}</span>` : ''}</span>`; })}</div>
-        ${missing.length ? html`<div class="app-alert app-alert--warning" style="margin-top:14px">${icon('warn')}<div class="grow"><b>${plural(missing.length, 'scene')} without a page</b>LetzAI’s API can’t create pages. Add ${missing.length === 1 ? 'a page' : 'pages'} named ${missing.map((s) => `“Scene ${s.id}”`).join(', ')} on the canvas, then check again. Takes of those scenes won’t send until then.</div><div class="row wrap" style="gap:6px"><button class="app-btn app-btn--sm" id="copyPageNames" data-names="${missing.map((s) => `Scene ${s.id}`).join('\n')}">${icon('copy', 14)}<span>Copy names</span></button><a class="app-btn app-btn--sm" href="${canvasUrl()}" target="_blank" rel="noopener">${icon('external', 14)}<span>Open canvas</span></a><button class="app-btn app-btn--sm" id="retry">Check again</button></div></div>` : ''}
+        ${missing.length ? html`<div class="app-alert app-alert--warning" style="margin-top:14px">${icon('warn')}<div class="grow"><b>${plural(missing.length, 'scene')} without a page</b>Add ${missing.map((s) => `“Scene ${s.id}”`).join(', ')} on the canvas, then check again.</div><div class="row wrap" style="gap:6px"><button class="app-btn app-btn--sm" id="copyPageNames" data-names="${missing.map((s) => `Scene ${s.id}`).join('\n')}">${icon('copy', 14)}<span>Copy names</span></button><a class="app-btn app-btn--sm" href="${canvasUrl()}" target="_blank" rel="noopener">${icon('external', 14)}<span>Open canvas</span></a><button class="app-btn app-btn--sm" id="retry">Check again</button></div></div>` : ''}
       </div>`;
   }
   const missing = sc.filter((s) => status.labels[s.id] === false);
   return html`
     <div class="section-label">Scene labels on the page</div>
     <div class="surface pad">
-      <div class="faint" style="margin-bottom:12px">Clips are placed in a grid under a text node called “Scene N”. A scene without one is parked below everything else on the page, far from where you’d look.</div>
       <div class="row wrap" style="gap:8px">${sc.map((s) => html`<span class="app-chip ${status.labels[s.id] ? 'app-chip--success' : 'app-chip--warning'}">${icon(status.labels[s.id] ? 'check' : 'dashed', 12)} Scene ${s.id}</span>`)}</div>
       ${missing.length ? html`<div class="row" style="margin-top:14px"><button class="app-btn app-btn--sm app-btn--outline" id="makeLabels">${icon('plus', 14)}<span>Create ${plural(missing.length, 'missing label')}</span></button></div>` : ''}
     </div>`;
@@ -134,7 +133,7 @@ function sendTable() {
     <div class="surface">
       <div class="send-bar">
         <div class="app-tabs" role="tablist">${[['printed', 'Printed'], ['all', 'All takes'], ['todo', 'Not on canvas'], ...(nFailed ? [['failed', `Failed (${nFailed})`]] : [])].map(([id, l]) => html`<button class="app-tab" role="tab" data-sf="${id}" aria-selected="${f === id}">${l}</button>`)}</div>
-        ${!anyPrinted && filter === 'printed' ? html`<span class="faint">Nothing is printed yet, so all takes are shown.</span>` : ''}
+        ${!anyPrinted && filter === 'printed' ? html`<span class="faint">Nothing printed yet, showing all</span>` : ''}
         ${folderButton()}
         <span class="grow"></span>
         <button class="app-btn" id="sortCanvas" title="Re-order the kit’s clips on the canvas" ${connected() ? '' : 'disabled'}>${icon('layers')}<span>Sort canvas</span></button>
@@ -149,20 +148,20 @@ function sendTable() {
             <td class="tnum muted">${fmtDur(c.duration)}</td>
             <td class="tnum muted">${c.cutFiles.length || '—'}</td>
             <td>${c.canvasError ? html`<span class="app-chip xs app-chip--error" title="${c.canvasError.message}">${icon('alert', 12)} failed</span>` : c.onCanvas ? html`<span class="app-chip xs app-chip--success">${icon('check', 12)} On canvas</span>` : c.cutFiles.length ? html`<span class="tnum faint">${c.cutOnCanvas} / ${c.cutFiles.length}</span>` : html`<span class="faint">—</span>`}</td></tr>`)}`)}</tbody></table>`
-      : html`<div class="app-empty"><div class="app-empty-title">No takes here</div><div class="app-empty-body">${f === 'printed' ? 'Circle takes in Review with P and they show up here.' : f === 'failed' ? 'Nothing failed.' : 'Everything is already on the canvas.'}</div></div>`}
+      : html`<div class="app-empty"><div class="app-empty-title">No takes here</div><div class="app-empty-body">${f === 'printed' ? 'Print takes in Review (P) to see them here.' : f === 'failed' ? 'Nothing failed.' : 'Everything is already on the canvas.'}</div></div>`}
     </div>`;
 }
 
 function snippetCard() {
   const s = proj().snippets;
   return html`
-    <div class="section-label">Cutting</div>
+    <details class="fold" ${foldOpen ? 'open' : ''} id="cutFold"><summary class="section-label">Cutting options</summary>
     <div class="surface pad snippet-grid">
-      ${field('Longest snippet', html`<div class="row"><input class="app-input" id="snMax" type="number" min="2" max="600" value="${s.maxSeconds}" style="width:90px"><span class="muted">seconds</span></div>`, 'Longer takes are split into pieces of this length.')}
-      ${field('Picture size', html`<select class="app-input" id="snH" style="width:200px">${[[0, 'Original size'], [2160, 'Up to 4K'], [1440, 'Up to 1440p'], [1080, 'Up to 1080p (recommended)'], [720, 'Up to 720p']].map(([v, l]) => html`<option value="${v}" ${+s.height === v ? 'selected' : ''}>${l}</option>`)}</select>`, 'Smaller files upload faster. Clips are never scaled up.')}
-      ${field('Encoder', html`<select class="app-input" id="snEnc" style="width:200px"><option value="auto" ${s.encoder !== 'cpu' ? 'selected' : ''}>Automatic (graphics card if available)</option><option value="cpu" ${s.encoder === 'cpu' ? 'selected' : ''}>Processor only</option></select>`)}
-      <div class="app-field"><label>&nbsp;</label><label class="app-switch"><input type="checkbox" id="snLossless" ${s.lossless ? 'checked' : ''}><span>Fast cuts without re-encoding<br><span class="faint">Cuts land on keyframes. Ignored when scaling the picture.</span></span></label></div>
-    </div>`;
+      ${field('Longest snippet', html`<div class="row"><input class="app-input" id="snMax" type="number" min="2" max="600" value="${s.maxSeconds}" style="width:90px"><span class="muted">seconds</span></div>`)}
+      ${field('Picture size', html`<select class="app-input" id="snH" style="width:200px" title="Clips are never scaled up">${[[0, 'Original size'], [2160, 'Up to 4K'], [1440, 'Up to 1440p'], [1080, 'Up to 1080p (recommended)'], [720, 'Up to 720p']].map(([v, l]) => html`<option value="${v}" ${+s.height === v ? 'selected' : ''}>${l}</option>`)}</select>`)}
+      ${field('Encoder', html`<select class="app-input" id="snEnc" style="width:200px"><option value="auto" ${s.encoder !== 'cpu' ? 'selected' : ''}>Automatic</option><option value="cpu" ${s.encoder === 'cpu' ? 'selected' : ''}>Processor only</option></select>`)}
+      <div class="app-field"><label>&nbsp;</label><label class="app-switch" title="Cuts land on keyframes. Ignored when scaling the picture."><input type="checkbox" id="snLossless" ${s.lossless ? 'checked' : ''}><span>Fast cuts without re-encoding</span></label></div>
+    </div></details>`;
 }
 
 function draw() {
@@ -171,7 +170,7 @@ function draw() {
   const ae = document.activeElement;
   const keep = ae && ae.id === 'keyInput' ? ae.value : null;
   mount(root, html`<div class="page nav">
-    <div class="page-head"><div><h1 class="page-title">Canvas</h1><div class="page-sub">Cut your takes into snippets and send them to LetzAI Canvas, sorted by scene, shot and take.</div></div></div>
+    <div class="page-head"><div><h1 class="page-title">Canvas</h1><div class="page-sub">Send takes to your LetzAI canvas, cut into snippets and sorted by scene.</div></div></div>
     ${connectionCard()}${problems()}${destinations()}${sendTable()}${snippetCard()}
   </div>`);
   root.scrollTop = sy;
@@ -225,6 +224,7 @@ export default {
   flush: false,
   mount(el) {
     root = el;
+    el.addEventListener('toggle', (e) => { if (e.target.id === 'cutFold') foldOpen = e.target.open; }, true);
     draw();
     refresh();
     wireFolderControls(el, on);

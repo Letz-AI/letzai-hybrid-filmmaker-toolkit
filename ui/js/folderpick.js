@@ -1,4 +1,4 @@
-// The folder control shared by Board, Review, Ingest and Canvas: one place to say "only show Shoot day 2".
+// The folder control shared by Dashboard, Review, Ingest and Canvas: one place to say "only show Shoot day 2".
 import { html, icon, plural, fmtDur } from './lib.js';
 import { S, folders, folderLabel, setFolderFilter } from './store.js';
 import { openMenu } from './ui.js';

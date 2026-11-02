@@ -5,7 +5,7 @@ Where the kit could go next. Nothing here is promised; it is a list of ideas, ro
 ## The hybrid loop (what makes this tool different)
 
 - **Frame to generation.** Grab the current frame of a take (or a printed take's first frame) and send it straight to LetzAI: as a reference for an image edit, as the first frame of a video, or as input for a trained `@model`. The result comes back to the project.
-- **Generated shots as first-class takes.** Bring generated clips back into the Board next to the real takes of the same shot: marked as generated, rated and printed the same way, and counted in coverage. "Shot 6.4 is covered by a generated take" becomes visible.
+- **Generated shots as first-class takes.** Bring generated clips back into the Dashboard next to the real takes of the same shot: marked as generated, rated and printed the same way, and counted in coverage. "Shot 6.4 is covered by a generated take" becomes visible.
 - **Canvas to shot list.** Read a canvas page such as "Shotlist" or "Storyboard" and offer to turn its frames into planned shots, so the plan lives where the team already works.
 - **Pull selects back from the canvas.** Show which printed takes already have generations on the canvas, and link a generation to the take it came from.
 

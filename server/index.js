@@ -293,8 +293,11 @@ function pickFolder(title, start) {
   return new Promise((resolve, reject) => {
     let cmd; let args;
     if (process.platform === 'win32') {
-      const ps = `Add-Type -AssemblyName System.Windows.Forms; $o = New-Object System.Windows.Forms.Form; $o.TopMost = $true; $o.ShowInTaskbar = $false; $o.Opacity = 0; $o.StartPosition = 'CenterScreen'; $o.Show(); $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = $env:KIT_TITLE; $f.ShowNewFolderButton = $true; if ($env:KIT_START -and (Test-Path -LiteralPath $env:KIT_START)) { $f.SelectedPath = $env:KIT_START }; if ($f.ShowDialog($o) -eq 'OK') { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $f.SelectedPath }; $o.Close()`;
-      cmd = 'powershell.exe'; args = ['-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-Command', ps];
+      // The modern Explorer-style "Select Folder" dialog (resizable, address bar, quick access); the script falls back
+      // to the old tree dialog if the modern one cannot be created. Passed as an encoded command rather than run as a
+      // .ps1 file, so an execution policy set by Group Policy (AllSigned on managed PCs) cannot block it.
+      cmd = 'powershell.exe';
+      args = ['-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-EncodedCommand', pickFolderScript()];
     } else if (process.platform === 'darwin') {
       cmd = 'osascript'; args = ['-e', `POSIX path of (choose folder with prompt "${title.replace(/"/g, '')}")`];
     } else {
@@ -302,11 +305,24 @@ function pickFolder(title, start) {
       args = cmd === 'zenity' ? ['--file-selection', '--directory', `--title=${title}`] : ['--getexistingdirectory', start || os.homedir(), '--title', title];
     }
     const p = spawn(cmd, args, { env: { ...process.env, KIT_TITLE: title, KIT_START: start || '' }, windowsHide: true });
-    let out = '';
+    let out = ''; let err = '';
     p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
     p.on('error', () => reject(httpError(501, 'No native folder dialog is available here. Type the path instead.')));
-    p.on('close', () => resolve(out.trim().replace(/\/$/, '') || null));
+    p.on('close', (code) => {
+      const picked = out.trim().replace(/\/$/, '');
+      if (picked || code === 0) { resolve(picked || null); return; }  // a cancel exits cleanly with no output
+      const why = err.replace(/\s+/g, ' ').trim().slice(0, 300);
+      reject(httpError(500, `The folder dialog could not open${why ? `: ${why}` : ''}. Type the path instead.`));
+    });
   });
+}
+
+let pickFolderEncoded = null;
+/** server/lib/pick-folder.ps1 as a -EncodedCommand argument (UTF-16LE, base64), read once. */
+function pickFolderScript() {
+  if (!pickFolderEncoded) pickFolderEncoded = Buffer.from(fs.readFileSync(path.join(__dirname, 'lib', 'pick-folder.ps1'), 'utf8'), 'utf16le').toString('base64');
+  return pickFolderEncoded;
 }
 
 /** A native "choose files" dialog. Returns the chosen paths (empty when cancelled). */

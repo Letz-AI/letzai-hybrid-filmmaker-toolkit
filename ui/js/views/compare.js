@@ -118,11 +118,10 @@ function renderInsp() {
       <div class="insp-label">AI result</div>
       <input class="app-input" id="iLabel" value="${a.label}" maxlength="80" aria-label="Label">
       <div class="faint" style="font-size:12px;margin-top:6px;word-break:break-all">${a.kind === 'file' ? a.path : html`From your canvas <a href="${a.url}" target="_blank" rel="noopener">${icon('external', 12)}</a>`}</div>
-      ${a.missing ? html`<div class="app-alert app-alert--warning" style="margin-top:10px">${icon('warn')}<div class="grow"><b>The file is missing</b>It was moved or deleted. Put it back, or remove this result and add it again.</div></div>` : ''}
+      ${a.missing ? html`<div class="app-alert app-alert--warning" style="margin-top:10px">${icon('warn')}<div class="grow"><b>The file is missing</b>Moved or deleted.</div></div>` : ''}
     </div>
     <div class="insp-sec">
       <div class="insp-label">Where it lines up</div>
-      <div class="faint" style="font-size:12px;margin-bottom:8px">The AI clip usually comes from a piece of the take. Say where that piece starts, so both play in step.</div>
       <div class="row" style="gap:8px"><input class="app-input tnum" id="iStart" type="number" min="0" step="0.04" value="${(a.originalStart || 0).toFixed(2)}" style="width:96px" aria-label="Starts at, in seconds"><span class="muted">seconds into the take</span></div>
       <div class="row" style="gap:6px;margin-top:8px"><span class="faint" style="font-size:12px">Nudge</span>
         <button class="app-btn app-btn--sm" id="nudgeBack" title="Original one frame earlier">${icon('chevronLeft', 14)} frame</button>
@@ -132,15 +131,13 @@ function renderInsp() {
     </div>
     <div class="insp-sec">
       <div class="insp-label">Note</div>
-      <textarea class="app-input" id="iNote" rows="3" placeholder="What changed, what worked, what to try next…" spellcheck="true">${a.note || ''}</textarea>
+      <textarea class="app-input" id="iNote" rows="3" placeholder="Add a note…" spellcheck="true">${a.note || ''}</textarea>
     </div>
     <div class="insp-sec"><div class="row wrap" style="gap:8px">
       ${a.kind === 'file' ? html`<button class="app-btn app-btn--sm" id="iReveal">${icon('folder', 14)}<span>Show file</span></button>` : ''}
       <button class="app-btn app-btn--sm" id="iAddMore">${icon('plus', 14)}<span>Add another</span></button>
-      <button class="app-btn app-btn--sm app-btn--danger" id="iRemove">${icon('trash', 14)}<span>Remove</span></button></div>
-      <div class="faint" style="font-size:12px;margin-top:10px">Removing only forgets the mapping. The video file stays where it is.</div></div>
-    <div class="insp-sec"><div class="insp-label">Keys</div><div class="faint" style="font-size:12px;line-height:1.9">
-      <span class="kbd">Space</span> play <span class="kbd">←</span><span class="kbd">→</span> frame <span class="kbd">1</span>–<span class="kbd">4</span> mode <span class="kbd">S</span> swap sides <span class="kbd">[</span><span class="kbd">]</span> other AI result <span class="kbd">{</span><span class="kbd">}</span> other take</div></div>`);
+      <button class="app-btn app-btn--sm app-btn--danger" id="iRemove" title="Forgets the mapping. The video file stays where it is.">${icon('trash', 14)}<span>Remove</span></button></div>
+</div>`);
   if (keepLabel != null) { const i = $('#iLabel', el); i.focus(); i.value = keepLabel; }
   if (keepNote != null) { const i = $('#iNote', el); i.focus(); i.value = keepNote; }
 }
@@ -187,7 +184,7 @@ function overlay(content) {
 }
 function refreshOverlay() {
   const waiting = [pend.orig && 'the original', pend.ai && 'the AI result'].filter(Boolean);
-  if (waiting.length) overlay(html`<div class="ovl-card"><span class="spinner"></span><div><b>Preparing a playback copy of ${waiting.join(' and ')}</b><div class="muted">A smaller copy is being made so your browser can play it. This only happens once.</div></div></div>`);
+  if (waiting.length) overlay(html`<div class="ovl-card"><span class="spinner"></span><div><b>Preparing a playback copy of ${waiting.join(' and ')}</b></div></div>`);
   else overlay(null);
 }
 
@@ -289,9 +286,8 @@ function emptyState() {
   mount(root, html`<div class="app-empty" style="height:100%;gap:12px">
     <div class="cmp-empty-ic">${icon('compare', 24)}</div>
     <div class="app-empty-title">Compare the real take with the AI version</div>
-    <div class="app-empty-body">Add the videos you generated and say which take each one came from. Then drag a slider between the original and the result, or put them side by side, fade between them, or see the difference.</div>
-    <button class="app-btn app-btn--primary" id="cAddFirst">${icon('plus')}<span>Add AI results…</span></button>
-    <div class="faint" style="font-size:12px;max-width:52ch">Files on your computer or videos already on your LetzAI canvas both work. Name your clips first (Ingest) so there is a take to map them to.</div></div>`);
+    <div class="app-empty-body">Add the videos you generated and pick the take each one came from.</div>
+    <button class="app-btn app-btn--primary" id="cAddFirst">${icon('plus')}<span>Add AI results…</span></button></div>`);
   on(root, 'click', '#cAddFirst', () => openAddAi({}));
 }
 

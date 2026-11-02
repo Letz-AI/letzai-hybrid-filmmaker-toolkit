@@ -6,7 +6,7 @@ import { openPopup } from './ui.js';
 function actionList() {
   const go = (v) => () => window.kitGo(v);
   return [
-    { label: 'Go to Board', icon: 'board', hay: 'board coverage missing overview', run: go('board') },
+    { label: 'Go to Dashboard', icon: 'board', hay: 'dashboard board coverage missing overview', run: go('board') },
     { label: 'Go to Review', icon: 'review', hay: 'review watch player', run: go('review') },
     { label: 'Go to Ingest (name raw clips)', icon: 'slate', hay: 'ingest slate name rename raw unnamed', run: go('ingest') },
     { label: 'Go to Canvas', icon: 'canvas', hay: 'canvas letzai send upload', run: go('canvas') },
@@ -14,10 +14,7 @@ function actionList() {
     { label: 'Rename takes (change scene, shot or take numbers)', icon: 'pencil', hay: 'rename takes shot scene renumber change fix mislabeled wrong named', run: () => { window.kitGo('board'); S.filters.boardMode = 'clips'; setTimeout(() => document.querySelector('[data-mode=clips]')?.click(), 300); } },
     { label: 'Compare original with AI result', icon: 'compare', hay: 'compare original ai result generated slider before after wipe', run: go('compare') },
     { label: 'Add AI results (map generated videos to takes)', icon: 'plus', hay: 'add ai results generated videos map takes compare', run: () => import('./aiadd.js').then((m) => m.openAddAi({})) },
-    { label: 'Read slates of unnamed clips with Claude', icon: 'bolt', hay: 'claude ai read slate klappe name unnamed suggest anthropic', run: () => import('./slate.js').then((m) => m.openSlateReader({ keys: unnamed().map((c) => c.key), title: 'Read slates with Claude' })) },
-    { label: 'Read and rename ALL clips in the shown folder with Claude (named or not)', icon: 'bolt', hay: 'claude ai force rename all rerun re-read reread every clip folder shoot day slate klappe overwrite', run: () => { const mine = clips().filter((c) => !c.skip); import('./slate.js').then((m) => m.openSlateReader({ keys: mine.map((c) => c.key), force: true, title: `Read and rename ${mine.length} clips with Claude` })); } },
-    { label: 'Check names: read slates of named takes again with Claude', icon: 'bolt', hay: 'claude ai check verify re-read reread slate klappe named takes names wrong', run: () => import('./slate.js').then((m) => m.openSlateReader({ keys: clips().filter((c) => c.kind === 'shot').map((c) => c.key), force: true, title: 'Check names with Claude' })) },
-    { label: 'Name several clips at once', icon: 'slate', hay: 'name rename multiple several batch many clips ingest slate', run: () => { window.kitGo('ingest'); setTimeout(() => import('./views/ingest.js').then((m) => m.openBulkName()), 400); } },
+    { label: 'Name several clips…', icon: 'slate', hay: 'name rename multiple several batch many clips ingest slate claude ai read check klappe', run: () => { window.kitGo('ingest'); setTimeout(() => import('./views/ingest.js').then((m) => m.openBulkName()), 400); } },
     { label: 'Add a scene', icon: 'plus', hay: 'add new scene plan', run: () => import('./views/shotlist.js').then((m) => m.addSceneDialog()) },
     { label: 'Edit shot list', icon: 'list', hay: 'shot list plan edit scenes', run: () => import('./views/shotlist.js').then((m) => m.openShotList()) },
     { label: 'Rename all files to the current naming scheme', icon: 'pencil', hay: 'rename all files batch naming scheme prefix padding', run: () => import('./renameall.js').then((m) => m.openRenameAll()) },

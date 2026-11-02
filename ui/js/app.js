@@ -17,7 +17,7 @@ import settings from './views/settings.js';
 
 const VIEWS = { board, review, compare, ingest, canvas: canvasView, settings };
 const NAV = [
-  { id: 'board', label: 'Board', icon: 'board', hint: 'What is shot, what is missing' },
+  { id: 'board', label: 'Dashboard', icon: 'board', hint: 'What is shot, what is missing' },
   { id: 'review', label: 'Review', icon: 'review', hint: 'Watch takes, rate, circle, cut' },
   { id: 'compare', label: 'Compare', icon: 'compare', hint: 'Original next to the AI version' },
   { id: 'ingest', label: 'Ingest', icon: 'slate', hint: 'Name raw clips from the slate' },
@@ -86,7 +86,7 @@ function renderTop() {
   const jobs = runningJobs();
   const failed = S.jobs.filter((j) => j.state === 'error' && Date.now() - (j.finishedAt || 0) < 3600e3).length;
   mount($top, html`
-    <div class="brand"><span>LetzAI</span><span class="brand-sub">Hybrid Filmmaker Kit</span></div>
+    <div class="brand"><img class="brand-l brand-l--light" src="/img/letzai-l.png" alt="LetzAI"><img class="brand-l brand-l--dark" src="/img/letzai-l-inverted.png" alt="LetzAI"><span>LetzAI</span><span class="brand-sub">Hybrid Filmmaker Kit</span></div>
     ${p ? html`<button class="app-btn" id="projectMenu" title="Project">${icon('folder')}<span>${p.name}</span>${icon('chevronDown', 12)}</button>` : ''}
     <div class="top-spacer"></div>
     ${p ? html`<button class="app-btn app-btn--outline" id="paletteBtn" title="Jump to any shot or action">${icon('search')}<span class="muted">Jump to…</span><span class="kbd">Ctrl K</span></button>` : ''}
@@ -156,7 +156,7 @@ export async function rescan() {
 
 function openShortcuts() {
   const rows = [
-    ['Global', [['Ctrl K', 'Jump to a shot or action'], ['g then b / r / m / i / c / s', 'Go to Board / Review / Compare / Ingest / Canvas / Settings'], ['?', 'This list']]],
+    ['Global', [['Ctrl K', 'Jump to a shot or action'], ['g then d / r / m / i / c / s', 'Go to Dashboard / Review / Compare / Ingest / Canvas / Settings'], ['?', 'This list']]],
     ['Review', [['Space or K', 'Play / pause'], ['J / L', 'Slower / faster (press again to speed up)'], ['← / →', 'Step one frame (Shift: one second)'], ['I / O', 'Set cut in / out point'], ['Enter', 'Add cut from in to out'], ['M', 'Drop a marker'], ['1 2 3', 'Rate: void / ok / good'], ['P', 'Print (circle) this take'], ['[ / ]', 'Previous / next take'], ['Shift [ / ]', 'Previous / next shot'], ['C', 'Compare with the next take'], ['T', 'Focus: hide the side panels'], ['S', 'Send this take to the canvas']]],
     ['Ingest', [['Enter', 'Apply the name and go to the next clip'], ['Tab', 'Move between scene, shot, take'], ['Esc', 'Skip this clip'], ['Ctrl Z', 'Undo the last rename']]],
   ];
@@ -177,7 +177,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '?') { e.preventDefault(); openShortcuts(); return; }
   if (!(S.info && S.info.project)) return;
   if (chord) {
-    const map = { b: 'board', r: 'review', m: 'compare', i: 'ingest', c: 'canvas', s: 'settings' };
+    const map = { d: 'board', b: 'board', r: 'review', m: 'compare', i: 'ingest', c: 'canvas', s: 'settings' };
     const dest = map[e.key.toLowerCase()];
     chord = null;
     if (dest) { e.preventDefault(); go(dest); }

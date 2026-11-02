@@ -99,7 +99,7 @@ textarea.app-input { height: auto; padding: var(--space-2) var(--space-3); line-
 .toast.error svg { color: var(--color-error); }
 .toast.success svg { color: var(--color-success); }
 
-.app-empty { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-12) var(--space-4); text-align: center; }
+.app-empty { display: grid; justify-items: center; align-content: center; gap: var(--space-2); padding: var(--space-12) var(--space-4); text-align: center; }
 .app-empty-title { font-weight: 600; font-size: 15px; }
 .app-empty-body { color: var(--text-secondary); max-width: 46ch; }
 

@@ -11,7 +11,7 @@ It runs on your own computer, with your own footage and your own LetzAI API key.
 
 Made for a hybrid workflow: shoot real footage, name and select it quickly, then bring the best takes into LetzAI to generate around them.
 
-![The Board shows every scene and shot, what is covered, and what is still missing](docs/screenshots/board.png)
+![The Dashboard shows every scene and shot, what is covered, and what is still missing](docs/screenshots/board.png)
 
 ## Contents
 
@@ -21,7 +21,7 @@ Made for a hybrid workflow: shoot real footage, name and select it quickly, then
 
 | | |
 |---|---|
-| **Board** | Your shot list laid over what was actually shot. Every scene and shot with a thumbnail, take count, status and warnings. Missing shots are called out. |
+| **Dashboard** | Your shot list laid over what was actually shot. Every scene and shot with a thumbnail, take count, status and warnings. Missing shots are called out. |
 | **Review** | A frame-accurate player built for dailies. Rate takes (void, ok, good), circle the one to print, write notes, set markers, mark in and out points, compare two takes side by side. Everything on the keyboard. |
 | **Ingest** | Name raw camera files from the slate (the *Klappe*). Read it, type scene, shot and take, press Enter, next clip. Or select many clips and name them in one go. Every rename can be undone. |
 | **Claude** | Add your own Anthropic API key and Claude reads the slate on each clip and suggests scene, shot and take. It works on unnamed clips and can re-check named takes, flagging names that do not match the slate. Nothing is renamed without your confirmation. |
@@ -130,16 +130,16 @@ The interface is developed against Chromium browsers. Safari and Firefox should 
 ## First session
 
 1. **Choose your film folder.** The kit adds one small file, `letzai-kit.json`, to it. Your footage is not moved or changed unless you rename or cut it here.
-2. **Name the raw clips** in *Ingest*. Camera files like `A001_10171033_C047.mov` become `YourFilm-scene6-shot2-take1.mov`. To name many at once, press **Name several at once…** (see below). Subfolders and your camera's own `Proxy` folder are picked up automatically.
-3. **Write the shot list** (*Board → Shot list*), or press *Use what's shot so far* and add the shots you still owe. The Board now shows what is missing. **Add scene** creates a whole scene in one step.
+2. **Name the raw clips** in *Ingest*. Camera files like `A001_10171033_C047.mov` become `YourFilm-scene6-shot2-take1.mov`. To name many at once, press **Name several…** (see below). Subfolders and your camera's own `Proxy` folder are picked up automatically.
+3. **Write the shot list** (*Dashboard → Shot list*), or press *Use what's shot so far* and add the shots you still owe. The Dashboard now shows what is missing. **Add scene** (below the last scene) creates a whole scene in one step.
 4. **Review** the takes. Rate with `1` `2` `3`, circle the keeper with `P`, add notes. `Ctrl K` (`Cmd K` on a Mac) jumps to any shot.
 5. **Connect LetzAI** in *Canvas*: paste your API key, pick the canvas, select takes, press *Cut and send*.
 
 ## The tour
 
-### Board and folders
+### Dashboard and folders
 
-The Board is home. Stat cards show what is covered, printed, still to review, and missing. *By scene* shows every shot as a card; *By folder* shows your shoot days and subfolders; *All clips* is a table you can tick takes in. The folder button limits any view to one folder.
+The Dashboard is home. Three numbers show what is covered (and missing), what still needs a review, and what is on the canvas. *By scene* shows every shot as a card; *By folder* shows your shoot days and subfolders; *All clips* is a table you can tick takes in. The folder button limits any view to one folder.
 
 ![By folder: one card per shoot day](docs/screenshots/folders.png)
 
@@ -171,28 +171,33 @@ Each unnamed clip shows a big frame to read the slate from (click to enlarge; th
 
 ![Ingest: read the slate, type, Enter](docs/screenshots/ingest.png)
 
-**Name several at once.** Press the white **Name several at once…** button at the top of the list. It shows every unnamed clip with a checkbox and the name it would get. Untick any you do not want, type the scene and shot from the slate, set the first take, and the takes count up in the order the clips were recorded (or choose *One shot each*). Press **Rename**. Names that exist already are never overwritten, and one **Undo** reverses the batch. Shortcut: `Ctrl K` → "Name several clips".
+**Name several.** Press **Name several…** at the top of the list. It is the one place to name many clips, in two ways:
+
+- **Type the slate.** Every unnamed clip is listed with a checkbox and the name it would get. Type the scene and shot, set the first take, and the takes count up in recording order (or choose *One shot each*). Press **Rename**.
+- **Claude reads the slates.** Tick the clips and Claude suggests a name for each (see below). Switch on *Also check clips that already have a name* to re-check named takes too, for example a whole shoot day (pick the folder first).
+
+Names that exist already are never overwritten, and one **Undo** reverses the batch. Shortcut: `Ctrl K` → "Name several clips".
 
 ![Name several clips at once](docs/screenshots/batch-rename.png)
 
 ### Renaming takes that already have a name
 
 - **Review → Rename ▾**: *This take*, *Whole shot* or *Whole scene*.
-- **Board → By scene**: the **Rename** button on each scene.
-- **Board → All clips**: tick takes, then **Rename selected…**.
+- **Dashboard → By scene**: the **Rename** button on each scene.
+- **Dashboard → All clips**: tick takes, then **Rename selected…**.
 
 Change the scene or shot (leave a field empty to keep it) and optionally renumber the takes. You see every new name before anything happens.
 
 ![Rename a whole shot](docs/screenshots/rename-takes.png)
 
-**Rename all files** (*Settings → Naming*, the project menu, or `Ctrl K`) applies the current prefix, number padding and rating tags to every take you have named.
+**Rename all files** (*Settings → Advanced*, *Export ▾*, or `Ctrl K`) applies the current prefix, number padding and rating tags to every take you have named.
 
 ### Claude: reading slates
 
 Typing every slate by hand is the slow part of ingest. With your own Anthropic API key, Claude does the reading and you do the checking.
 
-1. **Add a key.** *Settings → Claude: reading slates*, or just press **Read all slates with Claude…** in Ingest and the dialog asks for it. Create the key in the [Anthropic Console](https://console.anthropic.com/settings/keys) (the account needs some credit). The key is tested when you save it, and stored only on your computer.
-2. **Choose the clips.** In Ingest, tick clips or read all of them. For **named takes**, use *Review → Rename ▾ → Check this name* (or the whole shot), tick takes on the Board and press **Check with Claude…**, or `Ctrl K` → *Check names*.
+1. **Add a key.** *Settings → Claude: reading slates*, or just start a reading and the dialog asks for it. Create the key in the [Anthropic Console](https://console.anthropic.com/settings/keys) (the account needs some credit). The key is tested when you save it, and stored only on your computer.
+2. **Choose the clips.** *Ingest → Name several… → Claude reads the slates*, or *Read slate with Claude* on a single clip. For one **named take**, use *Review → Rename ▾ → Check this name with Claude*.
 3. **Confirm what is sent.** The dialog shows how many clips and roughly how many tokens, lets you pick the model (Sonnet by default, Haiku is cheaper, Opus more careful) and asks you to agree that frames are sent to Anthropic. About six pictures from the start of each clip are sent; if no slate is there, six more from further in. File names are not sent.
 4. **Review the readings.** Each row shows the frame Claude read (click it to enlarge), what the slate says, the reading in three editable boxes, and how sure Claude is. Readings are flagged when the take already exists, another clip was read as the same take, the scene is not in your shot list, the number does not fit the recording order, or Claude is not sure. Confident, unflagged readings can be ticked in one click. Press **Rename** to apply them; it is one undo.
 
@@ -206,7 +211,7 @@ Cut takes into snippets and send them to LetzAI. See [The LetzAI Canvas connecti
 
 ## The shot list
 
-Plain text, one shot per line. The preview next to it shows exactly what the Board will track.
+Plain text, one shot per line. The preview next to it shows exactly what the Dashboard will track.
 
 ```
 Scene 6 - Kitchen
@@ -219,7 +224,7 @@ Scene 7 - Street
 7.1-3
 ```
 
-Inside a scene header you can leave the scene number out (`2A  Close on the cup`). Without a shot list the Board still spots holes in your numbering (shots 1, 2 and 4 means 3 is flagged).
+Inside a scene header you can leave the scene number out (`2A  Close on the cup`). Without a shot list the Dashboard still spots holes in your numbering (shots 1, 2 and 4 means 3 is flagged).
 
 ## Keyboard
 
@@ -228,7 +233,7 @@ On a Mac, `Ctrl` is `Cmd`.
 | Anywhere | |
 |---|---|
 | `Ctrl K` | Jump to any shot, file or action |
-| `g` then `b` `r` `m` `i` `c` `s` | Go to Board, Review, Compare, Ingest, Canvas, Settings |
+| `g` then `d` `r` `m` `i` `c` `s` | Go to Dashboard, Review, Compare, Ingest, Canvas, Settings |
 | `?` | All shortcuts |
 
 | Review | | | |
@@ -275,7 +280,7 @@ The kit talks to the public LetzAI API (`https://api.letz.ai`) with your own key
 - **What gets uploaded.** Only the snippets you send. Pictures are scaled to at most 1080p by default (configurable), clips are never scaled up, and each snippet is at most 30 seconds.
 - **Order.** Three clips per row, ordered by shot, take and cut, each with a caption. The kit only moves nodes it created (they carry a `ltn:` id), never yours.
 - **No duplicates, no stale clips.** A clip with the same file name is not uploaded twice. If you cut a take again, the changed snippet replaces the old one.
-- **Errors are never swallowed.** Each upload is checked: the upload link, the bytes that arrived (compared with the file size on LetzAI), and the nodes that were created. Network problems, rate limits and stalled transfers are retried. One bad snippet does not stop the rest of its take. Whatever still fails stays on the take with the reason, shown in the top bar, on the Board, in Review and on the Canvas page, with **Retry**.
+- **Errors are never swallowed.** Each upload is checked: the upload link, the bytes that arrived (compared with the file size on LetzAI), and the nodes that were created. Network problems, rate limits and stalled transfers are retried. One bad snippet does not stop the rest of its take. Whatever still fails stays on the take with the reason, shown in the top bar, on the Dashboard, in Review and on the Canvas page, with **Retry**.
 
 ## Playback, 4K and HEVC
 
@@ -332,7 +337,7 @@ No build step and no runtime dependencies: the server is plain Node (`server/`),
 
 ## Brand
 
-The interface follows the [LetzAI brand guidelines](https://www.letz.ai/brandguidelines) and design system: monochrome, Inter, one filled action per surface. The LetzAI logo files are not included in this repository.
+The interface follows the [LetzAI brand guidelines](https://www.letz.ai/brandguidelines) and design system: monochrome, Inter, one filled action per surface. The LetzAI **L** in the top bar uses the official files, unchanged; the wordmark and lockup are not included.
 
 ## License
 

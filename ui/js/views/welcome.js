@@ -39,7 +39,7 @@ function hero() {
         <div class="row">${icon(ffOk ? 'checkCircle' : 'alert')}<div class="grow"><b>ffmpeg</b><div class="muted">${ffOk ? html`Found, version ${S.info.ffmpeg.version}.` : html`Needed for thumbnails, review proxies and cuts.`}</div></div></div>
         ${ffOk ? '' : html`<div class="app-alert app-alert--warning" style="grid-column:1/-1"><div class="grow"><b>Install ffmpeg to continue</b>
             Windows: <code>winget install Gyan.FFmpeg</code> &nbsp;·&nbsp; macOS: <code>brew install ffmpeg</code> &nbsp;·&nbsp; Linux: <code>sudo apt install ffmpeg</code><br>Then restart the kit. You can also point <code>LETZAI_KIT_FFMPEG</code> at your ffmpeg folder.</div></div>`}
-        <div class="row">${icon(S.info.key.set ? 'checkCircle' : 'info')}<div class="grow"><b>LetzAI API key</b><div class="muted">${S.info.key.set ? 'Saved on this computer.' : 'Optional. Add it later in Canvas to send takes to your canvas.'}</div></div></div>
+        <div class="row">${icon(S.info.key.set ? 'checkCircle' : 'info')}<div class="grow"><b>LetzAI API key</b><div class="muted">${S.info.key.set ? 'Saved' : 'Optional. Add it later in Canvas.'}</div></div></div>
       </div>
     </div>`;
 }
@@ -76,7 +76,7 @@ export function createDialog(dir) {
         ${field('File name prefix', html`<input class="app-input" id="cPrefix" value="${suggestPrefix(base)}" spellcheck="false">`, html`Takes are named <b style="display:inline" id="cEx"></b>`)}
         <div class="app-field"><div class="label">Where is the footage?</div><div id="cFolders" class="folder-list"></div>
           <div class="row"><button class="app-btn app-btn--sm" id="cAdd">${icon('plus', 14)}<span>Add another folder</span></button></div>
-          <div class="app-hint">Subfolders are included. Folders named cuts, Proxy and Proxies are skipped.</div></div>
+          <div class="app-hint">Subfolders are included.</div></div>
       </div>`,
     foot: html`<button class="app-btn" data-close2>Cancel</button><button class="app-btn app-btn--primary" id="cCreate">Create project</button>`,
   });

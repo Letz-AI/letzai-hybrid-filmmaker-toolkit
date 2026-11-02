@@ -33,7 +33,7 @@ export async function openRenameAll() {
           ${pv.conflicts.length ? html`<span class="app-chip app-chip--warning">${pv.conflicts.length} skipped</span>` : ''}
           <span class="faint">Cut snippets and camera proxies are renamed along with their take.</span></div>
 
-        ${pv.onCanvas ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>${plural(pv.onCanvas, 'take')} already on the canvas</b>Clips on the canvas keep their old names. Under the new names the kit will treat them as not sent, so sending them again adds a second copy. Delete the old ones on the canvas if you do.</div></div>` : ''}
+        ${pv.onCanvas ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>${plural(pv.onCanvas, 'take')} already on the canvas</b>Canvas copies keep their old names, so sending again adds a second copy.</div></div>` : ''}
 
         <div class="rename-list" role="table" aria-label="Files that will be renamed">
           ${shown.map((c) => html`<div class="rename-row" role="row"><span class="mono-name faint">${c.from}</span><span class="faint">${icon('arrowRight', 14)}</span><span class="mono-name"><b>${c.to}</b>${c.cuts || c.proxy ? html` <span class="faint">+ ${[c.cuts ? plural(c.cuts, 'cut') : '', c.proxy ? 'proxy' : ''].filter(Boolean).join(', ')}</span>` : ''}</span></div>`)}

@@ -62,7 +62,7 @@ export function openAddAi({ key } = {}) {
         <div class="row" style="gap:6px"><span class="faint" style="font-size:12px">snippet</span><input class="app-input tnum" data-cut type="number" min="1" placeholder="–" value="${r.cut || ''}" style="width:64px" aria-label="Snippet number"></div>
         <div class="faint tnum" style="font-size:11px;min-width:84px">${startOf(r) != null ? `starts ${fmtDur(startOf(r))}` : ''}</div>
         <button class="app-icon-btn app-icon-btn--sm" data-drop title="Remove from this list">${icon('close', 14)}</button></div>`)}</div>
-      <div class="faint" style="font-size:12px;margin-top:8px">A generated clip is usually made from one snippet of a take. If you know which, enter its number and both will line up when you compare. You can fine-tune it later.</div>` : html`<div class="faint" style="padding:6px 2px">Nothing chosen yet.</div>`);
+` : html`<div class="faint" style="padding:6px 2px">Nothing chosen yet.</div>`);
     // the option lists are filled after mounting (they are long, and need to keep the current choice)
     p.el.querySelectorAll('.ai-row').forEach((rowEl) => {
       const r = rows.find((x) => String(x.rid) === rowEl.dataset.rid);
@@ -104,7 +104,7 @@ export function openAddAi({ key } = {}) {
     mount(box, html`<div class="row faint" style="padding:12px"><span class="spinner"></span> Looking for videos on your canvas…</div>`);
     try {
       const { media } = await get('/api/canvas/media');
-      if (!media.length) { mount(box, html`<div class="app-alert">${icon('info')}<div class="grow"><b>No videos found</b>Videos you or the kit did not put there yourself show up here. Generate something on the canvas first.</div></div>`); return; }
+      if (!media.length) { mount(box, html`<div class="app-alert">${icon('info')}<div class="grow"><b>No generated videos on this canvas yet</b></div></div>`); return; }
       mount(box, html`<div class="surface" style="padding:12px">
         <div class="row" style="margin-bottom:8px"><b class="grow">${plural(media.length, 'video')} on the canvas</b><button class="app-btn app-btn--sm" id="aaCvClose">Close</button><button class="app-btn app-btn--sm app-btn--primary" id="aaCvUse">Use ticked</button></div>
         <div class="canvas-grid">${media.map((m, i) => html`<label class="canvas-item"><input type="checkbox" class="app-check" data-cm="${i}">

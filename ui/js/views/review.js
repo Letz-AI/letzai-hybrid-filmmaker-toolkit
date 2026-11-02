@@ -30,6 +30,7 @@ let unsubJobs = null;
 let docKey = null;
 let docProxy = null;
 let showAll = false;
+let fileOpen = false;     // "File details" unfolded (kept across redraws)
 const navOpen = new Set();
 
 const cur = () => (key ? clip(key) : null);
@@ -208,7 +209,7 @@ function renderInspector() {
     </div>
 
     ${c.kind === 'raw' ? html`
-      <div class="insp-sec"><div class="app-alert">${icon('slate')}<div class="grow"><b>This clip has no name yet</b>Read the slate and name it, and it joins its shot on the Board.</div></div>
+      <div class="insp-sec"><div class="app-alert">${icon('slate')}<div class="grow"><b>No name yet</b></div></div>
         <button class="app-btn app-btn--primary" id="nameIt" style="width:100%;margin-top:12px">${icon('slate')}<span>Name from the slate</span></button></div>` : html`
       <div class="insp-sec">
         <div class="insp-label">Decision</div>
@@ -220,7 +221,7 @@ function renderInspector() {
 
     <div class="insp-sec">
       <div class="insp-label">Note</div>
-      <textarea class="app-input" id="noteBox" rows="3" placeholder="Performance, focus, sound, why it works…" spellcheck="true">${c.note}</textarea>
+      <textarea class="app-input" id="noteBox" rows="3" placeholder="Add a note…" spellcheck="true">${c.note}</textarea>
     </div>
 
     <div class="insp-sec">
@@ -233,28 +234,26 @@ function renderInspector() {
           <button class="link-btn tnum" data-seek="${r.in}" data-out="${r.out}" title="Play this cut">${fmtTc(r.in, fps(c))} → ${fmtTc(r.out, fps(c))}</button>
           <input class="app-input cut-label" data-cut-label="${r.id}" value="${r.label}" placeholder="Label" maxlength="80">
           <button class="app-icon-btn app-icon-btn--sm" data-del-cut="${r.id}" title="Remove cut">${icon('close', 14)}</button></div>`)}</div>` : ''}
-      <div class="faint" style="font-size:12px;margin-top:8px">${plan.length ? `${plural(plan.length, 'snippet')}${c.cutRanges.length ? '' : ' (whole take)'}: ${plan.map((l) => `${Math.round(l)} s`).join(', ')}. Snippets are at most ${S.info.project.snippets.maxSeconds} s.` : 'Waiting for the clip length…'}</div>
+      ${plan.length ? html`<div class="faint" style="font-size:12px;margin-top:8px" title="Snippets are at most ${S.info.project.snippets.maxSeconds} s">${plural(plan.length, 'snippet')} · ${plan.map((l) => Math.round(l)).join(', ')} s</div>` : ''}
       ${c.marks.length ? html`<div class="insp-label" style="margin-top:14px">Markers</div><div class="marks">${c.marks.map((m) => html`<div class="cut-row"><button class="link-btn tnum" data-seek="${m.t}">${fmtTc(m.t, fps(c))}</button><span class="grow faint">${m.label || ''}</span><button class="app-icon-btn app-icon-btn--sm" data-del-mark="${m.id}">${icon('close', 14)}</button></div>`)}</div>` : ''}
     </div>
 
     ${c.kind === 'shot' ? html`<div class="insp-sec">
       <div class="insp-label">AI versions</div>
-      ${c.ai && c.ai.length ? html`<div class="ai-list">${c.ai.map((a) => html`<button class="ai-item" data-compare-ai="${a.id}" title="Compare with the original">${icon('compare', 14)}<span class="grow ellipsis">${a.label}</span><span class="faint tnum">${fmtDur(a.duration)}</span></button>`)}</div>` : html`<div class="faint" style="font-size:12px;margin-bottom:8px">Map a generated video to this take to compare them with a slider.</div>`}
-      <button class="app-btn app-btn--sm" id="aiAdd" style="margin-top:8px">${icon('plus', 14)}<span>Add AI result…</span></button>
+      ${c.ai && c.ai.length ? html`<div class="ai-list">${c.ai.map((a) => html`<button class="ai-item" data-compare-ai="${a.id}" title="Compare with the original">${icon('compare', 14)}<span class="grow ellipsis">${a.label}</span><span class="faint tnum">${fmtDur(a.duration)}</span></button>`)}</div>` : ''}
+      <button class="app-btn app-btn--sm" id="aiAdd" style="margin-top:${c.ai && c.ai.length ? 8 : 0}px" title="Add a generated video to compare it with this take">${icon('plus', 14)}<span>Add AI result…</span></button>
     </div>` : ''}
 
     ${c.kind === 'shot' ? html`<div class="insp-sec">
       <div class="insp-label">Canvas</div>
       ${c.canvasError ? html`<div class="app-alert app-alert--error" style="margin-bottom:10px">${icon('alert')}<div class="grow"><b>Didn’t reach the canvas</b><span style="word-break:break-word">${c.canvasError.message}</span>${(c.canvasError.files || []).slice(0, 4).map((f) => html`<div class="faint" style="font-size:12px;margin-top:4px">${f.file}</div>`)}</div></div>` : ''}
-      <div class="row wrap" style="margin-bottom:10px">
-        ${c.cutFiles.length ? html`<span class="app-chip xs ${c.onCanvas ? 'app-chip--ink' : ''}">${icon(c.onCanvas ? 'check' : 'cloud', 12)} ${c.onCanvas ? 'On canvas' : `${c.cutOnCanvas} of ${c.cutFiles.length} cuts on canvas`}</span>` : html`<span class="app-chip xs app-chip--quiet">Not cut yet</span>`}
-      </div>
+      ${c.cutFiles.length ? html`<div class="row wrap" style="margin-bottom:10px"><span class="app-chip xs ${c.onCanvas ? 'app-chip--ink' : ''}">${icon(c.onCanvas ? 'check' : 'cloud', 12)} ${c.onCanvas ? 'On canvas' : `${c.cutOnCanvas} of ${c.cutFiles.length} on canvas`}</span></div>` : ''}
       <div class="row"><button class="app-btn app-btn--primary grow" id="sendCanvas">${icon('canvas')}<span>${!connected ? 'Connect canvas' : c.canvasError ? 'Retry send' : 'Send to canvas'}</span><span class="kbd">S</span></button>
         <button class="app-btn" id="cutOnly" title="Cut the snippets without uploading">${icon('scissors')}<span>Cut only</span></button></div>
     </div>` : ''}
 
-    <div class="insp-sec">
-      <div class="insp-label">File</div>
+    <details class="insp-sec insp-fold" id="fileFold" ${fileOpen ? 'open' : ''}>
+      <summary class="insp-label">File details</summary>
       ${p ? html`<div class="kvs">
         ${hasManyFolders() ? html`<div class="kv"><span class="faint">Folder</span><span title="${c.dir}">${c.dir === '.' ? folderLabel('.') : c.dir}</span></div>` : ''}
         ${camRow('Recorded', c.recordedAt ? `${fmtDay(c.recordedAt)} ${fmtClock(c.recordedAt)}` : '')}
@@ -262,8 +261,8 @@ function renderInspector() {
         ${camRow('Picture', `${p.width}×${p.height} · ${p.fps} fps · ${p.codec}`)}
         ${camRow('Size', fmtSize(c.size))}
         ${cam ? html`${camRow('Camera', cam.model)}${camRow('Lens', cam.lens)}${camRow('Exposure', [cam.iso && `ISO ${cam.iso}`, cam.shutter && `${cam.shutter}`, cam.aperture].filter(Boolean).join(' · '))}${camRow('White balance', cam.kelvin && `${cam.kelvin} K`)}${camRow('LUT', cam.lut)}${camRow('Camera clip', cam.clipId)}` : ''}
-      </div>` : html`<div class="faint">Reading file details…</div>`}
-    </div>`);
+      </div>` : ''}
+    </details>`);
 
   if (prevNote != null) { const nb = $('#noteBox', el); nb.focus(); nb.setSelectionRange(selStart, selStart); }
 }
@@ -327,7 +326,7 @@ function setOverlay(content) {
 function pendingOverlay() {
   const job = pending && S.jobs.find((j) => j.id === pending.jobId);
   const pct = job && job.state === 'running' ? Math.round(job.progress * 100) : 0;
-  return html`<div class="ovl-card"><span class="spinner"></span><div><b>Preparing a review copy</b><div class="muted">This is a 4K camera file your browser can’t play directly. A smaller copy is being made, about ${job && job.state === 'running' ? `${pct}% done` : 'a minute'}. The kit prepares the others in the background, so they open instantly.</div></div></div>`;
+  return html`<div class="ovl-card"><span class="spinner"></span><div><b>Preparing a playable copy</b><div class="muted">${job && job.state === 'running' ? `${pct}%` : 'Starting…'}</div></div></div>`;
 }
 
 async function loadPlayback(k, { hevc = S.hevc } = {}) {
@@ -587,8 +586,7 @@ function bindPlayer() {
       { label: 'This take…', icon: 'pencil', onClick: () => openRenameTakes([c.key], { afterRename: after }) },
       { label: `Whole shot ${c.scene}.${c.shot} (${plural(shotTakes.length, 'take')})…`, icon: 'layers', onClick: () => openRenameTakes(shotTakes.map((x) => x.key), { title: `Rename shot ${c.scene}.${c.shot}`, afterRename: after }) },
       { label: `Whole scene ${c.scene} (${plural(sceneTakes.length, 'take')})…`, icon: 'board', onClick: () => openRenameTakes(sceneTakes.map((x) => x.key), { title: `Rename scene ${c.scene}`, afterRename: after }) },
-      { label: 'Check this name: read the slate again with Claude…', icon: 'bolt', onClick: () => openSlateReader({ keys: [c.key], force: true, title: `Check ${c.scene}.${c.shot} take ${c.take}` }) },
-      { label: `Check all of shot ${c.scene}.${c.shot} with Claude…`, icon: 'bolt', onClick: () => openSlateReader({ keys: shotTakes.map((x) => x.key), force: true, title: `Check shot ${c.scene}.${c.shot}` }) },
+      { label: 'Check this name with Claude…', icon: 'bolt', onClick: () => openSlateReader({ keys: [c.key], force: true, title: `Check ${c.scene}.${c.shot} take ${c.take}` }) },
     ], { align: 'end' });
   });
   on(root, 'click', '#nextShot', () => stepShot(1));
@@ -690,6 +688,7 @@ export default {
   flush: true,
   mount(el, args) {
     root = el;
+    el.addEventListener('toggle', (e) => { if (e.target.id === 'fileFold') fileOpen = e.target.open; }, true);
     const k = args[0] && clip(args[0]) ? args[0] : pickInitialKey();
     if (!k) { mount(el, html`<div class="app-empty" style="height:100%"><div class="app-empty-title">Nothing to review yet</div><div class="app-empty-body">Name your raw clips in Ingest, or add your footage folder in Settings.</div><a class="app-btn app-btn--outline" href="#/ingest">Open Ingest</a></div>`); return; }
     if (args[0] !== k) { location.replace(`#/review/${encodeURIComponent(k)}`); }

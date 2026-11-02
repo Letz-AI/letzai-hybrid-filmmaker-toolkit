@@ -25,7 +25,7 @@ export function openRenameTakes(keys, opts = {}) {
   const title = opts.title || (chosen.length === 1 ? `Rename ${chosen[0].scene}.${chosen[0].shot} take ${chosen[0].take}` : `Rename ${plural(chosen.length, 'take')}`);
 
   const p = openPopup({
-    title, subtitle: 'Change the scene or shot, and renumber the takes if you want. Leave a field empty to keep it.', width: 780,
+    title, subtitle: 'Leave a field empty to keep it.', width: 780,
     body: html`<div style="display:grid;gap:14px">
       <div class="row" style="gap:12px;align-items:flex-start">
         ${field('Scene', html`<input class="app-input" id="rScene" value="${scene0}" placeholder="${scene0 ? '' : 'keep'}" style="width:100px" maxlength="6" spellcheck="false">`, scene0 ? '' : 'Takes are from several scenes. Empty keeps each one.')}
@@ -92,8 +92,8 @@ export function openRenameTakes(keys, opts = {}) {
       rows();
       go.disabled = !r.changes.length;
       go.textContent = r.changes.length ? `Rename ${plural(r.changes.length, 'take')}` : 'Nothing to rename';
-      mount(q('#rWarn'), html`${r.conflicts.length ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>${plural(r.conflicts.length, 'take')} will be left alone</b>A name that already exists is never overwritten. Pick another shot or take number.</div></div>` : ''}
-        ${r.changes.some((c) => allClips().find((x) => x.key === c.key)?.cutOnCanvas) ? html`<div class="app-alert app-alert--warning" style="margin-top:10px">${icon('warn')}<div class="grow"><b>Some of these are on the canvas</b>Their clips there keep the old names, so sending them again would add a second copy.</div></div>` : ''}`);
+      mount(q('#rWarn'), html`${r.conflicts.length ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>${plural(r.conflicts.length, 'take')} will be left alone</b>That name already exists.</div></div>` : ''}
+        ${r.changes.some((c) => allClips().find((x) => x.key === c.key)?.cutOnCanvas) ? html`<div class="app-alert app-alert--warning" style="margin-top:10px">${icon('warn')}<div class="grow"><b>Some of these are on the canvas</b>Canvas copies keep their old names.</div></div>` : ''}`);
     } catch (e) { mount(q('#rWarn'), html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow">${e.message}</div></div>`); go.disabled = true; }
   };
   const soon = debounce(draw, 180);

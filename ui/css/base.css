@@ -41,7 +41,9 @@ h1, h2, h3, p { margin: 0; }
 .view-host.flush { overflow: hidden; }
 
 .brand { display: flex; align-items: center; gap: var(--space-2); min-width: calc(var(--rail-width) - var(--space-4) * 2); font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
-.brand img { height: 18px; display: block; }
+/* The LetzAI L, the official files unchanged: black tile on light, white tile on dark */
+.brand-l { width: 22px; height: 22px; display: block; flex: none; }
+[data-theme="dark"] .brand-l--light, [data-theme="light"] .brand-l--dark { display: none; }
 .brand .brand-sub { color: var(--text-secondary); font-weight: 500; }
 .top-spacer { flex: 1; }
 
