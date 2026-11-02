@@ -24,7 +24,7 @@ export async function openRenameAll() {
       <div class="surface pad" style="background:var(--control-hover-bg)">
         <div class="insp-label">Current scheme</div>
         <div class="mono-name tnum" style="font-size:15px;font-weight:600">${example}</div>
-        <div class="faint" style="margin-top:6px;font-size:12px">Prefix <b style="display:inline">${sch.prefix}</b> · scene ${padLabel(sch.pad.scene)} · shot ${padLabel(sch.pad.shot)} · take ${padLabel(sch.pad.take)} · rating in name ${sch.ratingInFilename ? 'on' : 'off'}. Change it in <a href="#/settings" data-settings>Settings</a>.</div>
+        <div class="faint" style="margin-top:6px;font-size:12px">Prefix <b style="display:inline">${sch.prefix}</b> · scene ${padLabel(sch.pad.scene)} · shot ${padLabel(sch.pad.shot)} · take ${padLabel(sch.pad.take)} · rating in name ${sch.ratingInFilename ? 'on' : 'off'}. Change it in <a href="#/settings/film" data-settings>Settings</a>.</div>
       </div>
 
       ${nothing ? html`<div class="app-alert app-alert--success">${icon('checkCircle')}<div class="grow"><b>Everything already follows the scheme</b>${plural(pv.total, 'take')} checked, nothing to rename.</div></div>` : html`

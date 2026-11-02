@@ -100,7 +100,7 @@ export async function openSlateReader({ keys, title = '', force = false, view = 
       <div><b>${est.clips ? `${plural(est.clips, 'clip')} will be read, for about ${money(est.usd)}` : 'Nothing new to read'}</b>
         <div class="muted">${est.clips ? `Up to ${money(est.usdMax)} if many slates come late and need a second look. This is an estimate; your ${v.company} usage page shows the exact cost.` : 'Every clip here was read already.'}</div>
         <div class="faint" style="font-size:12px;margin-top:4px">This month so far: about ${money(b.spent)}${b.monthly != null ? ` of your ${money(b.monthly)} budget` : ''}.</div></div>
-      ${b.reached ? html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow"><b>Monthly budget used up</b>Raise it in <a href="#/settings">Settings</a> to read more this month.</div></div>`
+      ${b.reached ? html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow"><b>Monthly budget used up</b>Raise it in <a href="#/settings/ai">Settings</a> to read more this month.</div></div>`
         : over && est.clips ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>This may go over your budget</b>${money(b.left)} is left this month. Reading stops when it is used up; what was read until then is kept.</div></div>` : ''}
       ${field('AI', providerPicker(v))}
       ${est.skipped || again ? html`<label class="app-switch"><input type="checkbox" id="slAgain" ${again ? 'checked' : ''}><span>Read clips again that were read before${est.skipped ? html`<br><span class="faint">${plural(est.skipped, 'clip')} already ${est.skipped === 1 ? 'has' : 'have'} a reading and would be skipped.</span>` : ''}</span></label>` : ''}

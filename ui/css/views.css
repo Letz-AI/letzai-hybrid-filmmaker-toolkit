@@ -190,6 +190,23 @@ input[type="range"] { accent-color: var(--color); height: 28px; }
 
 /* ---------- settings ---------- */
 .form-grid { display: grid; gap: var(--space-4); }
+/* Settings: a menu of pages on the left, one page on the right */
+.settings-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: var(--space-8); align-items: start; }
+.settings-nav { position: sticky; top: 0; display: grid; gap: 2px; }
+.settings-nav .rail-label:first-child { padding-top: 0; }
+.settings-nav .rail-item[aria-disabled="true"] { opacity: 0.4; cursor: default; }
+.settings-nav .rail-item[aria-disabled="true"]:hover { background: transparent; color: var(--text-secondary); }
+.settings-nav-note { font-size: 12px; color: var(--text-tertiary); padding: 0 var(--space-3) var(--space-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-title { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; margin: 0; }
+.settings-sub { margin: 4px 0 0; }
+.settings-body > .surface:first-of-type, .settings-body > .settings-sub + .surface, .settings-body > .settings-title + .surface { margin-top: var(--space-6); }
+.settings-body .section-label { margin-top: var(--space-6); }
+.danger-card { border-color: color-mix(in srgb, var(--color-error) 35%, transparent); }
+@media (max-width: 900px) {
+  .settings-layout { grid-template-columns: 1fr; gap: var(--space-6); }
+  .settings-nav { position: static; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .settings-nav .rail-label, .settings-nav-note { grid-column: 1 / -1; }
+}
 .setup-list, .data-list { display: grid; gap: var(--space-4); }
 .data-list > .row { align-items: flex-start; }
 .about a { color: inherit; }

@@ -18,6 +18,17 @@ test('every UI module parses', () => {
   }
 });
 
+test('no attribute markup is inserted as plain text (html`` would escape its quotes)', () => {
+  // ${on ? 'aria-current="page"' : ''} renders aria-current="&quot;page&quot;", so CSS never matches it.
+  // Write aria-current="${on ? 'page' : 'false'}", or wrap the markup in html``.
+  for (const f of files) {
+    if (path.basename(f) === 'lib.js') continue; // the icon drawings are inserted as trusted markup on purpose
+    fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      assert.ok(!/[?:] '[^']*="[^']*'/.test(line), `${path.relative(root, f)}:${i + 1} inserts attribute markup as text: ${line.trim().slice(0, 120)}`);
+    });
+  }
+});
+
 test('every import in the UI resolves to a file and an export that exists', () => {
   for (const f of files) {
     const src = fs.readFileSync(f, 'utf8');

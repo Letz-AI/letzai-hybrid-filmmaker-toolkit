@@ -183,7 +183,7 @@ function render() {
         </div>
       </div>
 
-      ${noClips ? html`<div class="app-empty surface"><div class="app-empty-title">No footage found yet</div><div class="app-empty-body">Looking in: ${p.folders.join(', ') || 'no folders'}</div><a class="app-btn app-btn--outline" href="#/settings">Open settings</a></div>` : html`
+      ${noClips ? html`<div class="app-empty surface"><div class="app-empty-title">No footage found yet</div><div class="app-empty-body">Looking in: ${p.folders.join(', ') || 'no folders'}</div><a class="app-btn app-btn--outline" href="#/settings/footage">Footage settings</a></div>` : html`
         <div id="discoverBanner">${discoverBanner()}</div>
         ${sendProblems()}
         <div class="toolbar">

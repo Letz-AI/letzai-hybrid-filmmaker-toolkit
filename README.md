@@ -101,6 +101,8 @@ Prefer double-clicking? Use **`Start-Kit.bat`** on Windows, **`Start-Kit.command
 
 Update with `git pull` (or download the ZIP again).
 
+*Settings* has two parts: **This film** (name, file names, footage folders, playback) and **Kit** (keys, AI slate reading and budget, appearance, system). The Kit part works before you open a film: use the gear at the top right. To test from a clean start, *Settings → Account and keys → Start from scratch* removes your keys and settings from this computer.
+
 To remove the kit, delete its folder. Your footage is not affected. Your settings and API keys are kept in a separate folder: `npm run check` shows where. Delete that too for a clean removal. Each film folder also has one small file, `letzai-kit.json`, with your ratings and notes.
 
 ### Windows, macOS and Linux
@@ -200,7 +202,7 @@ When a slate can't be read, the AI says so instead of guessing, and the clip is 
 You pay the AI company directly, for what you use. A rough guide per clip with the recommended models: Gemini 3.8 Flash about $0.007, GPT-6.1 Terra about $0.01, Claude Sonnet 5.5 about $0.016. That is roughly $1.50 to $3 for a shoot day of 200 clips. The cheapest models cost a tenth of that, the most careful ones about twice as much.
 
 - **Before each run** the kit shows the estimated price, and *Settings → AI slate reading* shows what you have spent this month.
-- **Monthly budget.** Set one in *Settings* (or in the setup). When it is used up, reading stops; clips read until then keep their results.
+- **Monthly budget.** Set one in *Settings → AI slate reading* (or in the setup). When it is used up, reading stops; clips read until then keep their results.
 - **Large runs** above an amount you choose ($5 by default) ask for a second confirmation.
 - These amounts are estimates based on list prices. For a hard limit, also set a spending limit in your Anthropic, OpenAI or Google account; the kit links to it.
 
@@ -261,14 +263,14 @@ On a Mac, use `Cmd` instead of `Ctrl`.
 <Prefix>-scene<S>-shot<H>-take<T>.<ext>        MyFilm-scene6-shot2A-take3.mov
 ```
 
-- The prefix is set in *Settings → Project*, and the number style (`6` or `06`) under *Settings → Advanced*.
-- Ratings and notes are saved in the project file, so a file name never changes when you change your mind. If you'd like the rating in the name (`...-take3-good-print.mov`), switch it on under *Advanced*.
+- The prefix and the number style (`6` or `06`) are set in *Settings → Film*.
+- Ratings and notes are saved in the project file, so a file name never changes when you change your mind. If you'd like the rating in the name (`...-take3-good-print.mov`), switch it on in *Settings → Film*.
 - Cut snippets go into a `cuts` folder next to the take (`...-take3-cut-1.mp4`). When you rename a take, its snippets and camera proxy are renamed with it.
 - Renaming is safe: if anything goes wrong, all changes are put back, and every rename can be undone. A file that is briefly in use (for example by Dropbox) is tried again.
 
 ## Sending to a LetzAI Canvas
 
-The kit uses the LetzAI API with your own key. Get a key at [letz.ai/subscription](https://letz.ai/subscription), paste it into *Canvas*, then choose your canvas.
+The kit uses the LetzAI API with your own key. Get a key at [letz.ai/subscription](https://letz.ai/subscription), paste it into *Settings → Account and keys* (or *Canvas*), then choose your canvas in *Canvas*.
 
 - **One page or one page per scene.** On *one page*, each scene gets a heading. With *page per scene*, each scene goes to its own page (`Scene 6`, `Scene 14`, …). The LetzAI API cannot create pages, so if a scene has no page yet, the kit tells you which page to add.
 - **What is uploaded.** Only the snippets you send, up to 30 seconds each, scaled down to 1080p by default.
@@ -307,7 +309,7 @@ API keys can also come from environment variables: `LETZAI_API_KEY`, `ANTHROPIC_
 | **A rename says a file is in use** | Dropbox, OneDrive or another program is reading it. Nothing was changed. Wait until syncing has finished and try again. |
 | **The AI key is not accepted, or there is no credit** | Check the key in *Settings → AI slate reading*. Most AI companies need some prepaid credit on the account. |
 | **"Monthly budget used up"** | Raise the budget in *Settings → AI slate reading*, or wait until next month. |
-| **A button is greyed out** | It needs a key you haven't added yet: the LetzAI key for anything with the canvas, an AI key for slate reading. *Settings → Setup check → Setup assistant…* adds both. |
+| **A button is greyed out** | It needs a key you haven't added yet: the LetzAI key for anything with the canvas, an AI key for slate reading. *Settings → Account and keys* adds both. |
 | **An upload failed** | Open *Canvas*: the take shows the reason, and *Retry* sends what is missing. "Scene N has no page" means you need to add a page with that name in LetzAI. |
 | **It opens in a browser tab, not a window** | That's fine, it works the same. The kit uses your normal browser when it can't find Chrome, Edge or Brave. |
 | **Port already in use** | `npm start -- --port 5000` |

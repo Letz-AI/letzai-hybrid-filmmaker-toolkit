@@ -61,8 +61,9 @@ function route() {
 function show() {
   const hasProject = !!(S.info && S.info.project);
   $app.classList.toggle('no-project', !hasProject);
-  const next = hasProject ? VIEWS[S.route.view] : welcome;
-  const viewSig = hasProject ? S.route.view : 'welcome';
+  // without a film only the welcome screen and Settings (keys, AI, appearance) make sense
+  const next = hasProject || S.route.view === 'settings' ? VIEWS[S.route.view] : welcome;
+  const viewSig = hasProject || S.route.view === 'settings' ? S.route.view : 'welcome';
   const argsSig = S.route.args.join('/');
   $main.classList.toggle('flush', !!next.flush);
   if (current.mod === next && current.view === viewSig) {
@@ -94,6 +95,7 @@ function renderTop() {
     ${p && proxyLeft() ? html`<button class="app-btn app-btn--sm" id="proxyChip" title="Getting clips ready so they open instantly. Click for details, to pause or to resume.">${S.proxy.prepare ? html`<span class="spinner"></span>` : icon('pause', 14)} <span>${S.proxy.prepare ? `Preparing playback · ${S.proxy.left} left · about ${S.proxy.etaMinutes < 90 ? `${S.proxy.etaMinutes} min` : `${Math.round(S.proxy.etaMinutes / 60)} h`}` : `Playback preparation paused · ${S.proxy.left} left`}</span></button>` : ''}
     ${p && failedSends().length ? html`<a class="app-btn app-btn--sm app-chip--error" href="#/canvas" title="These takes did not reach the canvas. Open Canvas to see why and retry.">${icon('alert', 14)}<span>${failedSends().length} upload${failedSends().length === 1 ? '' : 's'} failed</span></a>` : ''}
     ${p ? html`<button class="app-btn ${jobs.length ? '' : 'faint'}" id="queueBtn" title="Background jobs">${jobs.length ? html`<span class="spinner"></span>` : icon('layers')}<span>${jobs.length ? plural(jobs.length, 'job') : failed ? html`${failed} failed` : 'Queue'}</span></button>` : ''}
+    ${p ? '' : html`<a class="app-icon-btn" href="#/settings" title="Settings" aria-label="Settings">${icon('settings')}</a>`}
     <button class="app-icon-btn" id="themeBtn" title="Switch to ${theme() === 'dark' ? 'light' : 'dark'} theme" aria-label="Switch theme">${icon(theme() === 'dark' ? 'sun' : 'moon')}</button>
     <button class="app-icon-btn" id="helpBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">${icon('keyboard')}</button>`);
 }
@@ -106,12 +108,12 @@ function renderRail() {
   const counts = { ingest: raw || '', board: t && t.missing ? t.missing : '' };
   mount($rail, html`
     <div class="rail-label">Film</div>
-    ${NAV.slice(0, 5).map((n) => html`<a class="rail-item" href="#/${n.id}" ${S.route.view === n.id ? 'aria-current="page"' : ''} title="${n.hint}">${icon(n.icon)}<span>${n.label}</span>${counts[n.id] ? html`<span class="count" title="${n.id === 'ingest' ? 'unnamed clips' : 'shots missing'}">${counts[n.id]}</span>` : ''}</a>`)}
+    ${NAV.slice(0, 5).map((n) => html`<a class="rail-item" href="#/${n.id}" aria-current="${S.route.view === n.id ? 'page' : 'false'}" title="${n.hint}">${icon(n.icon)}<span>${n.label}</span>${counts[n.id] ? html`<span class="count" title="${n.id === 'ingest' ? 'unnamed clips' : 'shots missing'}">${counts[n.id]}</span>` : ''}</a>`)}
     <div class="rail-label">Project</div>
-    ${NAV.slice(5).map((n) => html`<a class="rail-item" href="#/${n.id}" ${S.route.view === n.id ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></a>`)}
+    ${NAV.slice(5).map((n) => html`<a class="rail-item" href="#/${n.id}" aria-current="${S.route.view === n.id ? 'page' : 'false'}">${icon(n.icon)}<span>${n.label}</span></a>`)}
     <div class="rail-foot">
-      ${S.info.ffmpeg.ok ? '' : html`<a href="#/settings" class="app-chip app-chip--warning">${icon('warn', 12)} ffmpeg missing</a>`}
-      ${S.info.key.set ? '' : html`<a href="#/canvas" class="faint">${icon('key', 12)} No LetzAI key yet</a>`}
+      ${S.info.ffmpeg.ok ? '' : html`<a href="#/settings/system" class="app-chip app-chip--warning">${icon('warn', 12)} ffmpeg missing</a>`}
+      ${S.info.key.set ? '' : html`<a href="#/settings/account" class="faint">${icon('key', 12)} No LetzAI key yet</a>`}
       <span title="${S.info.project.root}">${S.snap ? plural(S.snap.clips.length, 'clip') : ''}</span>
     </div>`);
 }
@@ -130,7 +132,7 @@ on($top, 'click', '#proxyChip', (e, el) => {
       ? { label: 'Pause, prepare only when I open a clip', icon: 'pause', onClick: () => setPrepare(false) }
       : { label: 'Resume preparing in the background', icon: 'play', onClick: () => setPrepare(true) },
     { sep: true },
-    { label: 'Playback settings', icon: 'settings', onClick: () => go('settings') },
+    { label: 'Playback settings', icon: 'settings', onClick: () => go('settings', 'playback') },
   ], { align: 'end' });
 });
 on($top, 'click', '#projectMenu', (e, el) => openMenu(el, [
