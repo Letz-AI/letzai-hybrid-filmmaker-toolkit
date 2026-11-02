@@ -6,7 +6,7 @@ import { S, clip, clips, scenes, findShot, takesOf, subscribeJobs, inFolder, set
 import { toast, toastError, openMenu } from '../ui.js';
 import { folderButton, wireFolderControls } from '../folderpick.js';
 import { openRenameTakes, takesOfShot, takesOfScene } from '../renametakes.js';
-import { openSlateReader } from '../slate.js';
+import { openSlateReader, aiName } from '../slate.js';
 import { openAddAi } from '../aiadd.js';
 
 const ls = {
@@ -586,7 +586,7 @@ function bindPlayer() {
       { label: 'This take…', icon: 'pencil', onClick: () => openRenameTakes([c.key], { afterRename: after }) },
       { label: `Whole shot ${c.scene}.${c.shot} (${plural(shotTakes.length, 'take')})…`, icon: 'layers', onClick: () => openRenameTakes(shotTakes.map((x) => x.key), { title: `Rename shot ${c.scene}.${c.shot}`, afterRename: after }) },
       { label: `Whole scene ${c.scene} (${plural(sceneTakes.length, 'take')})…`, icon: 'board', onClick: () => openRenameTakes(sceneTakes.map((x) => x.key), { title: `Rename scene ${c.scene}`, afterRename: after }) },
-      { label: 'Check this name with Claude…', icon: 'bolt', onClick: () => openSlateReader({ keys: [c.key], force: true, title: `Check ${c.scene}.${c.shot} take ${c.take}` }) },
+      { label: `Check this name with ${aiName()}…`, icon: 'bolt', onClick: () => openSlateReader({ keys: [c.key], force: true, title: `Check ${c.scene}.${c.shot} take ${c.take}` }) },
     ], { align: 'end' });
   });
   on(root, 'click', '#nextShot', () => stepShot(1));

@@ -1,7 +1,7 @@
-// Settings: project, footage, playback, Claude, appearance; naming details, setup check and data under Advanced.
+// Settings: project, footage, playback, AI slate reading, appearance; naming details, setup check and data under Advanced.
 import { html, icon, mount, on, $, plural, debounce, fmtSize } from '../lib.js';
 import { get, post, put, patch } from '../api.js';
-import { CONSOLE_KEYS } from '../slate.js';
+import { providerPicker, currentProvider } from '../slate.js';
 import { S, loadInfo, clips, allClips, folders } from '../store.js';
 import { toast, toastError, confirmDialog, field } from '../ui.js';
 import { openRenameAll } from '../renameall.js';
@@ -11,10 +11,10 @@ let root;
 let doctor = null;
 let found = [];
 let proxy = null;
-let vis = null;     // Claude / Anthropic settings from the server
+let vis = null;     // AI slate reading settings from the server (provider, model, consent, which keys are saved)
 let visBusy = '';
 let visMsg = null;  // { ok, text }
-let visError = ''; // why the Claude settings could not be loaded
+let visError = ''; // why those settings could not be loaded
 let advOpen = false; // "Advanced" unfolded (kept across redraws)
 
 const proj = () => S.info.project;
@@ -51,18 +51,19 @@ function draw() {
       <label class="app-switch" title="Camera files (4K HEVC) don’t play in most browsers, so the kit makes small playable copies."><input type="checkbox" id="sPrepare" ${p.playback && p.playback.prepare === false ? '' : 'checked'}><span>Prepare playable copies in the background${proxy ? html`<br><span class="faint">${proxy.left ? `${plural(proxy.left, 'clip')} left, about ${proxy.etaMinutes} min` : 'All ready'}</span>` : ''}</span></label>
     </div>
 
-    <div class="section-label">Claude: reading slates</div>
+    <div class="section-label">AI slate reading</div>
     <div class="surface pad form-grid">
-      ${visError ? html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow"><b>Couldn’t load the Claude settings</b>${visError}</div></div>` : vis ? html`
-        <div class="muted">Claude reads the slate on each clip and suggests its name. Uses your own Anthropic key.</div>
-        <div class="app-field"><label for="sVisKey">Anthropic API key</label>
-          ${vis.key.set ? html`<div class="row" style="gap:8px"><span class="app-chip app-chip--success">${icon('checkCircle', 14)}Saved${vis.key.source === 'environment' ? ' (ANTHROPIC_API_KEY)' : ''}</span><span class="grow"></span>${vis.key.source === 'file' ? html`<button class="app-btn app-btn--sm" id="visRemove">${icon('trash', 14)}<span>Remove key</span></button>` : ''}<button class="app-btn app-btn--sm" id="visTest">${visBusy === 'test' ? 'Testing…' : 'Test it'}</button></div>`
-            : html`<div class="row" style="gap:8px"><input class="app-input" id="sVisKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="app-btn app-btn--primary" id="visSave" style="flex:none">${visBusy === 'save' ? 'Testing…' : 'Save and test'}</button></div>
-              <div class="app-hint">Get one in the <a href="${CONSOLE_KEYS}" target="_blank" rel="noopener">Anthropic Console</a>.</div>`}
+      ${visError ? html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow"><b>Couldn’t load the AI settings</b>${visError}</div></div>` : vis ? html`
+        <div class="muted">An AI reads the slate on each clip and suggests its name. Uses your own API key.</div>
+        ${field('AI', providerPicker(vis))}
+        <div class="app-field"><label for="sVisKey">${vis.company} API key</label>
+          ${vis.key.set ? html`<div class="row" style="gap:8px"><span class="app-chip app-chip--success">${icon('checkCircle', 14)}Saved${vis.key.source === 'environment' ? ` (${currentProvider(vis).env})` : ''}</span><span class="grow"></span>${vis.key.source === 'file' ? html`<button class="app-btn app-btn--sm" id="visRemove">${icon('trash', 14)}<span>Remove key</span></button>` : ''}<button class="app-btn app-btn--sm" id="visTest">${visBusy === 'test' ? 'Testing…' : 'Test it'}</button></div>`
+            : html`<div class="row" style="gap:8px"><input class="app-input" id="sVisKey" type="password" placeholder="${currentProvider(vis).keyHint}" autocomplete="off" spellcheck="false"><button class="app-btn app-btn--primary" id="visSave" style="flex:none">${visBusy === 'save' ? 'Testing…' : 'Save and test'}</button></div>
+              <div class="app-hint">Get one in the <a href="${currentProvider(vis).keyUrl}" target="_blank" rel="noopener">${currentProvider(vis).keyPage}</a>.</div>`}
           ${visMsg ? html`<div class="app-alert app-alert--${visMsg.ok ? 'success' : 'error'}" style="margin-top:8px">${icon(visMsg.ok ? 'checkCircle' : 'alert')}<div class="grow">${visMsg.text}</div></div>` : ''}
         </div>
         ${field('Model', html`<select class="app-input" id="sVisModel">${vis.models.map((m) => html`<option value="${m.id}" title="${m.note}" ${m.id === vis.model ? 'selected' : ''}>${m.label}</option>`)}</select>`)}
-        <label class="app-switch" title="A few frames from the start of each clip you ask Claude to read. File names are not sent. You see the size of each run first."><input type="checkbox" id="sVisConsent" ${vis.consent ? 'checked' : ''}><span>Allow sending frames to Anthropic</span></label>` : html`<span class="row"><span class="spinner"></span> Loading…</span>`}
+        <label class="app-switch" title="A few frames from the start of each clip you ask the AI to read. File names are not sent. You see the size of each run first."><input type="checkbox" id="sVisConsent" ${vis.consent ? 'checked' : ''}><span>Allow sending frames to ${vis.company}</span></label>` : html`<span class="row"><span class="spinner"></span> Loading…</span>`}
     </div>
 
     <div class="section-label">Appearance</div>
@@ -82,7 +83,7 @@ function draw() {
       ${check(S.info.ffmpeg.ok, 'ffmpeg', S.info.ffmpeg.ok ? html`${S.info.ffmpeg.version}<br><span class="faint tnum">${S.info.ffmpeg.path}</span>` : 'Not found. Install it and restart the kit.')}
       ${check(!!doctor, 'Video encoder', doctor ? (doctor.encoder === 'libx264' ? 'Processor (x264). Cutting 4K is slow.' : `Graphics card (${doctor.encoder})`) : html`<span class="row"><span class="spinner"></span> Testing…</span>`)}
       ${check(S.hevc, 'HEVC playback', S.hevc ? 'Camera files play directly.' : html`Not in this browser, so playable copies are made. <span class="faint">On Windows the “HEVC Video Extensions” from the Microsoft Store fix this.</span>`)}
-      ${check(S.info.vision && S.info.vision.keySet, 'Anthropic API key', S.info.vision && S.info.vision.keySet ? 'Saved' : 'Optional')}
+      ${check(S.info.vision && S.info.vision.keySet, `${(S.info.vision && S.info.vision.company) || 'AI'} API key`, S.info.vision && S.info.vision.keySet ? 'Saved' : 'Optional')}
       ${check(S.info.key.set, 'LetzAI API key', S.info.key.set ? 'Saved' : html`Optional. Add it in <a href="#/canvas">Canvas</a>.`)}
       <div class="row" style="margin-top:6px"><button class="app-btn app-btn--sm" id="prepProxies">${icon('layers', 14)}<span>Prepare playable copies for ${needProxy ? plural(needProxy, 'clip') : 'all clips'} now</span></button></div>
     </div>
@@ -140,11 +141,12 @@ export default {
     on(el, 'click', '#importLog', async () => { try { const r = await post('/api/import-log', {}); toast(`Imported ${plural(r.applied, 'take')} from ${plural(r.rows, 'log row')}.`, { type: 'success' }); } catch (e) { toastError(e); } });
     const visTest = async (body, busy) => {
       visBusy = busy; visMsg = null; draw();
-      try { const r = await post('/api/vision/test', { ...body, model: vis.model }); vis = r; visMsg = { ok: true, text: 'The key works.' }; await loadInfo(); } catch (e) { visMsg = { ok: false, text: e.message }; }
+      try { const r = await post('/api/vision/test', { ...body, provider: vis.provider, model: vis.model }); vis = r; visMsg = { ok: true, text: 'The key works.' }; await loadInfo(); } catch (e) { visMsg = { ok: false, text: e.message }; }
       visBusy = ''; draw();
     };
     on(el, 'click', '#visSave', () => { const k = el.querySelector('#sVisKey').value.trim(); if (k) visTest({ key: k, save: true }, 'save'); });
     on(el, 'click', '#visTest', () => visTest({}, 'test'));
+    on(el, 'click', '[data-prov]', async (e, b) => { if (b.dataset.prov === vis.provider) return; try { vis = await put('/api/vision', { provider: b.dataset.prov }); visMsg = null; await loadInfo(); draw(); } catch (err) { toastError(err); } });
     on(el, 'click', '#visRemove', async () => { try { vis = await put('/api/vision', { key: '' }); visMsg = null; await loadInfo(); draw(); toast('Key removed from this computer.', { type: 'success' }); } catch (e) { toastError(e); } });
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'sVisKey') el.querySelector('#visSave').click(); });
     on(el, 'click', '#renameAll', () => openRenameAll());

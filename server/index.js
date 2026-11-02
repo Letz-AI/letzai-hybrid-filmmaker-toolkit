@@ -17,8 +17,6 @@ const vision = require('./lib/vision');
 const slate = require('./lib/slate');
 const { httpError } = require('./lib/util');
 
-/** What the UI needs to know about reading slates with Claude. The key itself never leaves the server. */
-const visionInfo = () => ({ key: { set: !!cfg.getAnthropicKey(), source: cfg.anthropicKeySource() }, ...cfg.visionSettings(), models: vision.MODELS });
 
 const UI_DIR = path.join(__dirname, '..', 'ui');
 const MIME = {
@@ -157,31 +155,35 @@ function createServer({ token, port, app: injected }) {
     'POST /api/canvas/sort': async () => app.sortCanvas().catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); }),
     'POST /api/canvas/pages': async () => ({ pages: await app.canvasPages(true).catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); }) }),
     'POST /api/canvas/labels': async ({ body }) => app.createLabels(body.scenes || []).catch((e) => { throw httpError(e.status || 500, canvas.explain(e)); }),
-    // Claude reads slates (Anthropic API, the user's own key)
-    'GET /api/vision': async () => visionInfo(),
+    // AI reads slates (Claude, ChatGPT or Gemini, with the user's own key). Keys never come back to the browser.
+    'GET /api/vision': async () => vision.info(),
     'PUT /api/vision': async ({ body }) => {
-      if (typeof body.key === 'string') await cfg.setAnthropicKey(body.key);
-      const patch = {};
-      if (body.model != null) { if (!vision.MODELS.some((m) => m.id === body.model)) throw httpError(400, 'Unknown model.'); patch.model = body.model; }
-      if (body.consent != null) patch.consent = !!body.consent;
-      if (Object.keys(patch).length) await cfg.setVisionSettings(patch);
-      return visionInfo();
+      const v = cfg.visionConfig();
+      if (body.provider != null) { if (!vision.PROVIDER_IDS.includes(body.provider)) throw httpError(400, 'Unknown AI provider.'); v.provider = body.provider; }
+      const pid = vision.PROVIDERS[v.provider] ? v.provider : vision.settings().provider;
+      if (typeof body.key === 'string') await cfg.setVisionKey(pid, body.key);
+      if (body.model != null) { if (!vision.PROVIDERS[pid].models.some((m) => m.id === body.model)) throw httpError(400, 'Unknown model.'); v.models[pid] = body.model; }
+      if (body.consent != null) v.consent[pid] = !!body.consent;
+      await cfg.setVisionConfig(v);
+      return vision.info();
     },
     'POST /api/vision/test': async ({ body }) => {
+      const pid = vision.PROVIDER_IDS.includes(body.provider) ? body.provider : vision.settings().provider;
       const key = typeof body.key === 'string' && body.key.trim() ? body.key.trim() : undefined;
-      const r = await vision.verifyKey({ key, model: body.model });
-      if (key && body.save) await cfg.setAnthropicKey(key);
-      return { ...r, ...visionInfo() };
+      const r = await vision.verifyKey({ provider: pid, key, model: body.model });
+      if (key && body.save) await cfg.setVisionKey(pid, key);
+      return { ...r, ...vision.info() };
     },
     'POST /api/slate/estimate': async ({ body }) => slate.estimate(app.requireProject(), body.keys || [], { force: !!body.force }),
     'POST /api/slate/read': async ({ body }) => {
       const p = app.requireProject();
-      if (!cfg.getAnthropicKey()) throw httpError(400, 'Add your Anthropic API key first.', { code: 'no-vision-key' });
-      if (!cfg.visionSettings().consent) throw httpError(400, 'Confirm first that frames from your clips may be sent to Anthropic.', { code: 'no-consent' });
+      const { provider, model, consent } = vision.settings();
+      const who = vision.PROVIDERS[provider];
+      if (!cfg.getVisionKey(provider)) throw httpError(400, `Add your ${who.company} API key first.`, { code: 'no-vision-key' });
+      if (!consent) throw httpError(400, `Confirm first that frames from your clips may be sent to ${who.company}.`, { code: 'no-consent' });
       const keys = (body.keys || []).filter((k) => p.byKey.has(k));
       if (!keys.length) throw httpError(400, 'Choose at least one clip.');
-      const model = cfg.visionSettings().model;
-      const job = app.jobs.add({ lane: 'vision', title: `Reading slates · ${keys.length === 1 ? p.byKey.get(keys[0]).name : `${keys.length} clips`}`, detail: `Claude · ${model}`, run: (ctx) => slate.readMany(p, keys, { model, force: !!body.force, signal: ctx.signal, progress: ctx.progress }) });
+      const job = app.jobs.add({ lane: 'vision', title: `Reading slates · ${keys.length === 1 ? p.byKey.get(keys[0]).name : `${keys.length} clips`}`, detail: `${who.label} · ${model}`, run: (ctx) => slate.readMany(p, keys, { provider, model, force: !!body.force, signal: ctx.signal, progress: ctx.progress }) });
       return { job: job.id };
     },
     'POST /api/slate/clear': async ({ body }) => ({ cleared: slate.clear(app.requireProject(), body.keys || []) }),

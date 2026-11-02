@@ -1,6 +1,6 @@
 'use strict';
-// Reading slates with Claude: key handling, the request that is sent, parsing, flags, retries and failure modes.
-// Everything runs against a fake Anthropic server and ffmpeg-made clips.
+// Reading slates with Claude, ChatGPT and Gemini: key handling, the request that is sent, parsing, flags, retries and
+// failure modes. Everything runs against a fake of the three APIs and ffmpeg-made clips.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -11,12 +11,13 @@ const { spawnSync } = require('child_process');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-slate-'));
 process.env.LETZAI_KIT_HOME = path.join(tmp, 'home');
-delete process.env.ANTHROPIC_API_KEY;
+for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY']) delete process.env[k];
 const ff = require('../server/lib/ffmpeg');
 const vision = require('../server/lib/vision');
 const slate = require('../server/lib/slate');
 const { createServer } = require('../server/index.js');
-const { startFakeAnthropic } = require('./helpers/fake-anthropic');
+const { startFakeAI } = require('./helpers/fake-ai');
+const cfg = require('../server/lib/config');
 const { until } = require('./helpers/wait');
 
 const loc = ff.locate(true);
@@ -56,17 +57,19 @@ function req(method, url, { body } = {}) {
     r.end();
   });
 }
-const waitJob = (id) => until(async () => {
+const waitJob = (id) => (assert.ok(id, 'no job was started'), until(async () => {
   const j = (await req('GET', '/api/jobs')).json.jobs.find((x) => x.id === id);
   return j && (j.state === 'done' || j.state === 'error' || j.state === 'canceled') && j;
-}, 'the slate job to finish');
+}, 'the slate job to finish'));
 const library = async () => (await req('GET', '/api/library')).json.clips;
 
 test.after(async () => { try { server && server.close(); } catch { /* not started */ } if (fake) await fake.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
 test('reading slates: key, consent, request shape, results, flags, retries, failures, clearing', { skip }, async () => {
-  fake = await startFakeAnthropic();
+  fake = await startFakeAI();
   process.env.ANTHROPIC_BASE_URL = fake.url;
+  process.env.OPENAI_BASE_URL = `${fake.url}/v1`;
+  process.env.GEMINI_BASE_URL = fake.url;
 
   const film = path.join(tmp, 'film');
   fs.mkdirSync(film, { recursive: true });
@@ -231,4 +234,74 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   await req('PUT', '/api/vision', { body: { key: '' } });
   assert.equal((await req('GET', '/api/vision')).json.key.set, false);
   assert.ok(!fs.existsSync(path.join(process.env.LETZAI_KIT_HOME, 'config', 'anthropic.key')));
+
+  // ---- ChatGPT (OpenAI) ----
+  let v = (await req('PUT', '/api/vision', { body: { provider: 'openai' } })).json;
+  assert.deepEqual([v.provider, v.label, v.model, v.key.set, v.consent], ['openai', 'ChatGPT', 'gpt-6.1-terra', false, false], 'consent is per company: agreeing for Anthropic is not agreeing for OpenAI');
+  assert.equal((await req('PUT', '/api/vision', { body: { model: 'claude-haiku-5-5' } })).status, 400, 'a model of another provider is refused');
+  assert.equal((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key] } })).json.code, 'no-vision-key');
+  const badOpenai = await req('POST', '/api/vision/test', { body: { key: 'sk-wrong', save: true } });
+  assert.equal(badOpenai.status, 401);
+  assert.match(badOpenai.json.error, /OpenAI did not accept/);
+  v = (await req('POST', '/api/vision/test', { body: { key: 'sk-openai-test', save: true } })).json;
+  assert.equal(v.key.set, true);
+  assert.ok(fs.existsSync(path.join(process.env.LETZAI_KIT_HOME, 'config', 'openai.key')));
+  assert.ok(!JSON.stringify(v).includes('sk-openai-test'));
+  assert.equal((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key] } })).json.code, 'no-consent');
+  await req('PUT', '/api/vision', { body: { consent: true, model: 'gpt-6-luna' } });
+
+  fake.state.requests.length = 0;
+  fake.state.answers.push(reading({ scene: '4', shot: '1', take: 2 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key], force: true } })).json.job)).state, 'done');
+  const oa = fake.state.requests.filter((r) => r.read);
+  assert.equal(oa.length, 1);
+  assert.deepEqual([oa[0].provider, oa[0].key, oa[0].body.model, oa[0].body.text.format.type], ['openai', 'sk-openai-test', 'gpt-6-luna', 'json_object']);
+  const oaImgs = oa[0].body.input[0].content.filter((c) => c.type === 'input_image');
+  assert.equal(oaImgs.length, 6);
+  assert.match(oaImgs[0].image_url, /^data:image\/jpeg;base64,\/9j\//, 'a real JPEG was sent');
+  assert.ok(!JSON.stringify(oa[0].body).includes('A001_C003'), 'file names are not sent');
+  let s0 = (await library()).find((c) => c.key === raws[2].key).slate;
+  assert.deepEqual([s0.scene, s0.shot, s0.take, s0.provider, s0.model, s0.tokens.in], ['4', '1', 2, 'openai', 'gpt-6-luna', 5000]);
+
+  // an OpenAI account without credit stops the run at once (no retries, no 40 failed clips)
+  fake.state.requests.length = 0;
+  fake.state.fail = { status: 429, code: 'insufficient_quota', message: 'You exceeded your current quota.', times: 99 };
+  const quota = await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[1].key, raws[2].key], force: true } })).json.job);
+  assert.equal(quota.state, 'error');
+  assert.match(quota.error, /OpenAI account has no credit/);
+  assert.ok(fake.state.requests.filter((r) => r.read).length <= 3, 'not retried');
+  fake.state.fail = null;
+
+  // ---- Gemini (Google) ----
+  v = (await req('PUT', '/api/vision', { body: { provider: 'google' } })).json;
+  assert.deepEqual([v.provider, v.label, v.model], ['google', 'Gemini', 'gemini-3.8-flash']);
+  const badGemini = await req('POST', '/api/vision/test', { body: { key: 'AIza-wrong', save: true } });
+  assert.equal(badGemini.status, 401, 'Google answers 400 for a bad key; the kit says what it means');
+  assert.match(badGemini.json.error, /Google did not accept/);
+  assert.equal((await req('POST', '/api/vision/test', { body: { key: 'AIza-test', save: true } })).status, 200);
+  assert.ok(fs.existsSync(path.join(process.env.LETZAI_KIT_HOME, 'config', 'gemini.key')));
+  await req('PUT', '/api/vision', { body: { consent: true } });
+  fake.state.requests.length = 0;
+  fake.state.answers.push(reading({ scene: '5', shot: '3B', take: 1 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key], force: true } })).json.job)).state, 'done');
+  const gm = fake.state.requests.filter((r) => r.read);
+  assert.equal(gm.length, 1);
+  assert.equal(gm[0].url, '/v1beta/models/gemini-3.8-flash:generateContent');
+  assert.equal(gm[0].key, 'AIza-test');
+  assert.equal(gm[0].body.generationConfig.responseMimeType, 'application/json');
+  assert.equal(gm[0].body.contents[0].parts.filter((x) => x.inlineData).length, 6);
+  s0 = (await library()).find((c) => c.key === raws[2].key).slate;
+  assert.deepEqual([s0.scene, s0.shot, s0.take, s0.provider, s0.tokens.out], ['5', '3B', 1, 'google', 80]);
+
+  // every provider keeps its own key and model; switching back does not lose them
+  v = (await req('PUT', '/api/vision', { body: { provider: 'openai' } })).json;
+  assert.deepEqual([v.model, v.key.set, v.consent], ['gpt-6-luna', true, true]);
+  assert.deepEqual(v.providers.map((x) => [x.id, x.key.set]), [['anthropic', false], ['openai', true], ['google', true]]);
+});
+
+test('an older config (one Claude model, one consent switch) still reads the same', async () => {
+  await cfg.saveConfig({ ...cfg.loadConfig(), vision: { model: 'claude-opus-5-5', consent: true } });
+  assert.deepEqual(vision.settings(), { provider: 'anthropic', model: 'claude-opus-5-5', consent: true });
+  await cfg.setVisionConfig({ provider: 'google' });
+  assert.deepEqual(vision.settings(), { provider: 'google', model: 'gemini-3.8-flash', consent: false });
 });

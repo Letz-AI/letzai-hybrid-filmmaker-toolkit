@@ -8,6 +8,7 @@ const ff = require('./lib/ffmpeg');
 const { Jobs } = require('./lib/jobs');
 const { Project, FILE_NAME } = require('./lib/project');
 const canvas = require('./lib/canvas');
+const vision = require('./lib/vision');
 const { httpError, natCompare, mapLimit } = require('./lib/util');
 
 const pkg = require('../package.json');
@@ -39,7 +40,7 @@ class App extends EventEmitter {
       ffmpeg: loc.ok ? { ok: true, version: loc.version, path: loc.ffmpeg } : { ok: false, missing: loc.missing || 'ffmpeg' },
       system: ff.describeSystem(),
       key: { set: !!cfg.getKey(), source: cfg.keySource() },
-      vision: { keySet: !!cfg.getAnthropicKey(), ...cfg.visionSettings() },
+      vision: (() => { const v = vision.settings(); const p = vision.PROVIDERS[v.provider]; return { ...v, label: p.label, company: p.company, keySet: !!cfg.getVisionKey(v.provider) }; })(),
       recent: cfg.loadConfig().recent.filter((r) => fs.existsSync(r.root)),
       project: this.project ? this.project.summary() : null,
     };

@@ -4,7 +4,7 @@ import { post, patch } from '../api.js';
 import { S, clips, allClips, clip, loadLibrary, hasManyFolders, folderLabel } from '../store.js';
 import { folderButton, wireFolderControls } from '../folderpick.js';
 import { toast, toastError, openPopup, field } from '../ui.js';
-import { openSlateReader } from '../slate.js';
+import { openSlateReader, aiName } from '../slate.js';
 
 const setSkip = (k, v) => patch('/api/clip', { key: k, patch: { skip: v } });
 
@@ -22,14 +22,14 @@ const skipped = () => clips().filter((c) => c.kind === 'raw' && c.skip);
 
 /**
  * The one place to name many clips. Either type the scene and shot from the slate (takes count up in recording order),
- * or let Claude read the slates; Claude can also re-check clips that already have a name.
+ * or let the AI read the slates; it can also re-check clips that already have a name.
  */
 function openBulkName() {
   const unnamed = queue();
   const named = clips().filter((c) => c.kind === 'shot' && !c.skip);
   if (!unnamed.length && !named.length) { toast('No clips here.'); return; }
   let src = unnamed.length ? 'type' : 'claude';  // 'type' | 'claude'
-  let withNamed = !unnamed.length;               // Claude only: also re-check named takes
+  let withNamed = !unnamed.length;               // AI only: also re-check named takes
   let mode = 'takes';                            // numbering when typing: 'takes' | 'shots'
   const on_ = new Set(withNamed ? named.map((c) => c.key) : unnamed.map((c) => c.key));
   const pool = () => (src === 'claude' && withNamed ? [...unnamed, ...named] : unnamed);
@@ -37,7 +37,7 @@ function openBulkName() {
   const p = openPopup({
     title: 'Name several clips', width: 780,
     body: html`<div style="display:grid;gap:14px">
-      <div class="app-segmented" role="radiogroup" aria-label="How to name"><button role="radio" data-src="type" ${unnamed.length ? '' : 'disabled'}>Type the slate</button><button role="radio" data-src="claude">${icon('bolt', 14)}Claude reads the slates</button></div>
+      <div class="app-segmented" role="radiogroup" aria-label="How to name"><button role="radio" data-src="type" ${unnamed.length ? '' : 'disabled'}>Type the slate</button><button role="radio" data-src="claude">${icon('bolt', 14)}${aiName()} reads the slates</button></div>
       <div class="row" id="bType" style="gap:12px;align-items:flex-start">${field('Scene', html`<input class="app-input" id="bScene" value="${pred.scene}" style="width:90px" maxlength="6" spellcheck="false">`)}${field('Shot', html`<input class="app-input" id="bShot" value="${pred.shot}" style="width:90px" maxlength="6" spellcheck="false">`)}${field('First take', html`<input class="app-input" id="bTake" type="number" min="1" value="${pred.take}" style="width:100px">`)}
         <div class="grow"></div>
         <div class="app-field"><div class="label">Numbering</div><div class="app-segmented" role="radiogroup" aria-label="How to number"><button role="radio" aria-checked="true" data-bm="takes">Takes of one shot</button><button role="radio" aria-checked="false" data-bm="shots">One shot each</button></div></div></div>
@@ -63,7 +63,7 @@ function openBulkName() {
     p.el.querySelector('#bClaude').style.display = src === 'claude' ? '' : 'none';
     p.el.querySelectorAll('[data-src]').forEach((x) => x.setAttribute('aria-checked', String(x.dataset.src === src)));
     p.el.querySelector('#bHint').textContent = !n ? 'Tick at least one clip.' : src === 'claude'
-      ? 'Nothing is renamed until you check what Claude read.'
+      ? `Nothing is renamed until you check what ${aiName()} read.`
       : mode === 'takes' ? `Scene ${val('#bScene') || '?'}, shot ${shot || '?'}: takes ${t0} to ${t0 + n - 1}.`
         : (/^\d+$/.test(shot) ? `Scene ${val('#bScene') || '?'}: shots ${shot} to ${+shot + n - 1}, take ${t0} each.` : 'Shot numbers can only count up from a plain number.');
     p.el.querySelector('[data-bm=shots]').disabled = !/^\d+$/.test(shot);
@@ -74,7 +74,7 @@ function openBulkName() {
   let names = new Map(); let why = new Map();
   const target = (c) => {
     if (!on_.has(c.key)) return html`<span class="faint">skipped</span>`;
-    if (src === 'claude') return html`<span class="faint">Claude reads it</span>`;
+    if (src === 'claude') return html`<span class="faint">${aiName()} reads it</span>`;
     return why.has(c.key) ? html`<span style="color:var(--color-warning)">${why.get(c.key)}</span>` : names.has(c.key) ? html`<b>${names.get(c.key)}</b>` : html`<span class="faint">…</span>`;
   };
   const rows = () => mount(p.el.querySelector('#bList'), html`${pool().map((c) => html`<label class="rename-row bulk-row" role="row">
@@ -124,7 +124,7 @@ function openBulkName() {
       const keys = orderedOn().map((c) => c.key);
       p.close();
       // read named takes again (that is the point of checking them); unnamed clips read before keep their reading
-      openSlateReader({ keys, force: keys.some((k) => clip(k) && clip(k).kind === 'shot'), title: `Read ${plural(keys.length, 'slate')} with Claude` });
+      openSlateReader({ keys, force: keys.some((k) => clip(k) && clip(k).kind === 'shot'), title: `Read ${plural(keys.length, 'slate')} with ${aiName()}` });
       return;
     }
     go.disabled = true;
@@ -193,7 +193,7 @@ function renderQueue() {
   const sk = skipped();
   mount($('#igQueue', root), html`
     <div class="nav-head"><div class="row"><span class="grow rail-label" style="padding:0">Unnamed clips</span><span class="faint tnum">${q.length}</span></div>${hasManyFolders() || S.filters.folder ? html`<div style="margin-top:8px">${folderButton()}</div>` : ''}
-      ${q.length > 1 || clips().some((c) => c.kind === 'shot') ? html`<button class="app-btn app-btn--primary" id="bulkName" style="width:100%;margin-top:10px" title="Type the slate once for many clips, or let Claude read them">${icon('slate')}<span>Name several…</span></button>` : ''}</div>
+      ${q.length > 1 || clips().some((c) => c.kind === 'shot') ? html`<button class="app-btn app-btn--primary" id="bulkName" style="width:100%;margin-top:10px" title="Type the slate once for many clips, or let the AI read them">${icon('slate')}<span>Name several…</span></button>` : ''}</div>
     <div class="nav-tree ig-list">
       ${q.map((c) => html`<div class="ig-row"><button class="ig-item ${c.key === key ? 'active' : ''}" data-q="${c.key}">
         <span class="mini-poster"><img loading="lazy" alt="" src="${frameUrl(c, clamp(c.duration ? Math.min(1, c.duration / 2) : 1, 0, 2), 200)}" onerror="this.style.visibility='hidden'"></span>
@@ -273,16 +273,16 @@ function renderMain() {
   void tk;
 }
 
-/** What Claude read from this clip's slate, with a button to use it. */
+/** What the AI read from this clip's slate, with a button to use it. */
 function renderClaudeBox() {
   const box = $('#igClaude', root);
   const c = key && clip(key);
   if (!box || !c) return;
   const s = c.slate;
   const flags = s && s.flags && s.flags.length ? html`<div style="font-size:12px;color:var(--color-warning);margin-top:2px">${s.flags.map((f) => ({ low: 'Not sure', partial: 'Only part of the slate was readable', taken: 'That take already exists', twice: 'Another clip was read the same', 'not-in-plan': 'Scene is not in the shot list', order: 'Out of recording order' }[f] || f)).join(' · ')}</div>` : '';
-  mount(box, !s ? html`<button class="app-btn app-btn--sm" id="igClaude1" title="Let Claude read this slate">${icon('bolt', 14)}<span>Read slate with Claude</span></button>`
-    : s.status === 'unreadable' ? html`<div class="claude-box"><div class="grow"><b>Claude found no readable slate</b>${s.evidence ? html`<div class="faint" style="font-size:12px">${s.evidence}</div>` : ''}</div><button class="app-btn app-btn--sm" id="igClaude1">Read again</button></div>`
-      : html`<div class="claude-box"><div class="grow"><div><span class="faint">Claude reads</span> <b class="tnum">${s.scene} · ${s.shot} · take ${s.take}</b> <span class="app-chip xs ${s.confidence >= 0.85 && !(s.flags || []).length ? 'app-chip--success' : 'app-chip--warning'}">${Math.round(s.confidence * 100)}%</span></div><div class="faint" style="font-size:12px">${s.evidence ? `Slate says “${s.evidence}”` : ''}${s.frameT != null ? ` · frame at ${s.frameT.toFixed(1)} s` : ''}</div>${flags}</div><button class="app-btn app-btn--sm app-btn--outline" data-fill="${s.scene}|${s.shot}|${s.take}" id="igUseClaude">Use this</button><button class="app-icon-btn app-icon-btn--sm" id="igClaude1" title="Read again">${icon('regenerate', 14)}</button></div>`);
+  mount(box, !s ? html`<button class="app-btn app-btn--sm" id="igClaude1" title="Let ${aiName()} read this slate">${icon('bolt', 14)}<span>Read slate with ${aiName()}</span></button>`
+    : s.status === 'unreadable' ? html`<div class="claude-box"><div class="grow"><b>No readable slate found</b>${s.evidence ? html`<div class="faint" style="font-size:12px">${s.evidence}</div>` : ''}</div><button class="app-btn app-btn--sm" id="igClaude1">Read again</button></div>`
+      : html`<div class="claude-box"><div class="grow"><div><span class="faint">Read as</span> <b class="tnum">${s.scene} · ${s.shot} · take ${s.take}</b> <span class="app-chip xs ${s.confidence >= 0.85 && !(s.flags || []).length ? 'app-chip--success' : 'app-chip--warning'}">${Math.round(s.confidence * 100)}%</span></div><div class="faint" style="font-size:12px">${s.evidence ? `Slate says “${s.evidence}”` : ''}${s.frameT != null ? ` · frame at ${s.frameT.toFixed(1)} s` : ''}</div>${flags}</div><button class="app-btn app-btn--sm app-btn--outline" data-fill="${s.scene}|${s.shot}|${s.take}" id="igUseClaude">Use this</button><button class="app-icon-btn app-icon-btn--sm" id="igClaude1" title="Read again">${icon('regenerate', 14)}</button></div>`);
 }
 
 const nextShotId = (s) => (/^\d+$/.test(s) ? String(+s + 1) : String((parseInt(s, 10) || 0) + 1));

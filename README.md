@@ -5,38 +5,38 @@
 ![Node 20+](https://img.shields.io/badge/node-20%2B-black.svg)
 ![Windows, macOS, Linux](https://img.shields.io/badge/runs%20on-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-black.svg)
 
-**Review your shoot, see which shots are still missing, name and select your takes, and send the best ones to a [LetzAI Canvas](https://www.letz.ai/canvas).**
+**Review your footage, see which shots are still missing, name and pick your best takes, and send them to a [LetzAI Canvas](https://www.letz.ai/canvas).**
 
-It runs on your own computer, with your own footage and your own LetzAI API key. Nothing is uploaded except the clips you choose to send to your canvas, and, only if you switch it on, a few frames per clip for Claude to read the slate. No account is needed to use the review tools, and there is nothing to build: you install Node.js and ffmpeg, download this repository, and start it.
+The kit runs on your own computer, with your own footage. It is free and open source. You don't need an account to review and name clips.
 
-Made for a hybrid workflow: shoot real footage, name and select it quickly, then bring the best takes into LetzAI to generate around them.
+It is made for hybrid films: shoot real footage, sort it quickly, then bring the best takes into LetzAI and generate around them.
 
 ![The Dashboard shows every scene and shot, what is covered, and what is still missing](docs/screenshots/board.png)
 
 ## Contents
 
-[What it does](#what-it-does) · [Install](#install) · [First session](#first-session) · [The tour](#the-tour) · [Claude](#claude-reading-slates) · [Compare](#compare-original-vs-ai) · [Shot list](#the-shot-list) · [Keyboard](#keyboard) · [File names](#how-files-are-named-and-renamed) · [LetzAI Canvas](#the-letzai-canvas-connection) · [4K and HEVC](#playback-4k-and-hevc) · [Your data](#your-data-and-privacy) · [Troubleshooting](#troubleshooting) · [Development](#development)
+[What it does](#what-it-does) · [Install](#install) · [First steps](#first-steps) · [A tour](#a-tour) · [AI slate reading](#ai-slate-reading) · [Shot list](#the-shot-list) · [Keyboard](#keyboard) · [File names](#file-names) · [LetzAI Canvas](#sending-to-a-letzai-canvas) · [4K and HEVC](#playing-4k-and-hevc-clips) · [Privacy](#your-data-and-privacy) · [Help](#when-something-goes-wrong) · [Development](#development)
 
 ## What it does
 
 | | |
 |---|---|
-| **Dashboard** | Your shot list laid over what was actually shot. Every scene and shot with a thumbnail, take count, status and warnings. Missing shots are called out. |
-| **Review** | A frame-accurate player built for dailies. Rate takes (void, ok, good), circle the one to print, write notes, set markers, mark in and out points, compare two takes side by side. Everything on the keyboard. |
-| **Ingest** | Name raw camera files from the slate (the *Klappe*). Read it, type scene, shot and take, press Enter, next clip. Or select many clips and name them in one go. Every rename can be undone. |
-| **Claude** | Add your own Anthropic API key and Claude reads the slate on each clip and suggests scene, shot and take. It works on unnamed clips and can re-check named takes, flagging names that do not match the slate. Nothing is renamed without your confirmation. |
-| **Rename** | Fix names later: one take, a whole shot, a whole scene or any selection. Change scene or shot and renumber takes. Or apply a new naming scheme to every file at once. |
-| **Folders** | A film is often several shoot days. Filter every view to one folder, browse folders as cards, and get told when new footage appears that the project does not look at yet. |
-| **Compare** | Map the AI videos you generated to the take they came from, then judge them against the original with a slider, side by side, a cross-fade or a difference view. Both play in sync, frame by frame. |
-| **Canvas** | Cut takes into snippets of at most 30 seconds and send them to a LetzAI Canvas, on one page or one page per scene. Every upload is verified, nothing is sent twice, and anything that fails stays on screen with the reason and a Retry. |
+| **Dashboard** | Your shot list next to what you actually shot: every scene and shot with a thumbnail, number of takes and status. Missing shots stand out. |
+| **Review** | A frame-accurate player for watching takes. Rate them, mark the one you want to use, write notes, set in and out points, and compare two takes side by side. Everything works from the keyboard. |
+| **Ingest** | Give camera files proper names from the slate: type scene, shot and take, press Enter, next clip. Or name many clips at once. Every rename can be undone. |
+| **AI slate reading** | Let Claude, ChatGPT or Gemini read the slates and suggest the names. You check them before anything is renamed. Uses your own API key. |
+| **Rename** | Fix names later: one take, a whole shot, a whole scene, or any selection. |
+| **Folders** | A film is often several shoot days. Show one folder at a time, and get told when new footage turns up. |
+| **Compare** | Put an AI-generated version of a take next to the original: with a slider, side by side, as a cross-fade, or as a difference view. Both play in sync. |
+| **Canvas** | Cut takes into short snippets (up to 30 seconds) and send them to your LetzAI Canvas, one page for everything or one page per scene. Nothing is sent twice, and failed uploads can be retried. |
 
 ## Install
 
-You need three things on your computer: **Node.js 20 or newer**, **ffmpeg**, and this repository. Nothing else, and no `npm install`: the kit has no dependencies.
+You need **Node.js 20 or newer** and **ffmpeg**. Nothing else: there is no `npm install`, the kit has no dependencies.
 
 ### 1. Install Node.js and ffmpeg
 
-Pick your system and run the commands in a terminal (Windows: PowerShell).
+Open a terminal (on Windows: PowerShell) and run the commands for your system.
 
 <table>
 <tr><th>Windows 10 / 11</th><th>macOS</th><th>Linux (Debian, Ubuntu)</th></tr>
@@ -61,39 +61,29 @@ No Homebrew? Get it at [brew.sh](https://brew.sh).
 sudo apt update
 sudo apt install ffmpeg git
 ```
-Node 20+: see [nodejs.org](https://nodejs.org/en/download) or use `nvm`. The `nodejs` in Debian and Ubuntu is often too old.
+For Node.js 20+ use [nodejs.org](https://nodejs.org/en/download): the version in Debian and Ubuntu is often too old.
 
 </td></tr>
 </table>
 
-Other Linux distributions: install `ffmpeg` (with `ffprobe`) and Node.js 20+ with your package manager (`dnf`, `pacman`, `zypper`…). Prefer not to use a package manager? Download Node.js from [nodejs.org](https://nodejs.org) and ffmpeg from [ffmpeg.org](https://ffmpeg.org/download.html) (on Windows, [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) builds work well). If ffmpeg lives somewhere unusual, set `LETZAI_KIT_FFMPEG` to its folder.
+On other systems, install Node.js 20+ and ffmpeg from [nodejs.org](https://nodejs.org) and [ffmpeg.org](https://ffmpeg.org/download.html).
 
-### 2. Get the kit
+### 2. Download the kit
 
 ```bash
 git clone https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit.git
 cd letzai-hybrid-filmmaker-toolkit
 ```
 
-No git? On the GitHub page press **Code → Download ZIP**, unzip it, and open a terminal in that folder.
+No git? On this page press **Code → Download ZIP**, unzip it, and open a terminal in that folder.
 
-### 3. Check that everything is in place
+### 3. Check your setup
 
 ```bash
 npm run check
 ```
 
-It lists what it found (Node, ffmpeg, your video encoder, a browser for the app window) and tells you exactly what to install if something is missing:
-
-```
-  ok       Node.js 22.11.0
-  ok       ffmpeg 7.1  /opt/homebrew/bin/ffmpeg
-  ok       ffprobe
-  ok       video encoder: h264_videotoolbox  (hardware)
-  ok       app window: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-  ...
-  Ready. Start the kit with:  npm start
-```
+This lists what was found and tells you what to install if something is missing.
 
 ### 4. Start it
 
@@ -101,134 +91,128 @@ It lists what it found (Node, ffmpeg, your video encoder, a browser for the app 
 npm start
 ```
 
-The kit opens in its own window (Chrome, Edge or Brave in app mode; otherwise your default browser). Close the terminal window to stop it.
+The kit opens in its own window. Closing the terminal stops it.
 
-Prefer a double-click? Use **`Start-Kit.bat`** (Windows), **`Start-Kit.command`** (macOS, the first time: right-click, Open) or **`start-kit.sh`** (Linux and macOS: `sh start-kit.sh`).
+Prefer double-clicking? Use **`Start-Kit.bat`** on Windows, **`Start-Kit.command`** on macOS (the first time: right-click, then Open), or **`start-kit.sh`** on Linux.
 
-**Just want a look around?** Run `npm run demo`. It builds a small synthetic film (slates, takes, two shoot days, a shot list with gaps, unnamed clips) and opens it. The demo lives in your temporary folder, so there is nothing to clean up.
+**Just want to look around?** Run `npm run demo`. It creates a small sample film with slates, takes, two shoot days and a shot list, and opens it.
 
 ### Updating and removing
 
-```bash
-git pull            # update (or download the ZIP again)
-```
+Update with `git pull` (or download the ZIP again).
 
-To remove the kit, delete its folder. Your footage is never touched by that. Settings and the saved API key live in a per-user folder (`%APPDATA%\LetzAI-Hybrid-Filmmaker-Kit` on Windows, `~/Library/Application Support/LetzAI-Hybrid-Filmmaker-Kit` on macOS, `~/.config/LetzAI-Hybrid-Filmmaker-Kit` on Linux) and review copies in the cache folder next to it; `npm run check` prints both locations. Delete them too for a clean removal. Each film also gets one small file, `letzai-kit.json`, in its folder.
+To remove the kit, delete its folder. Your footage is not affected. Your settings and API keys are kept in a separate folder: `npm run check` shows where. Delete that too for a clean removal. Each film folder also has one small file, `letzai-kit.json`, with your ratings and notes.
 
-### Platform notes
+### Windows, macOS and Linux
+
+The kit is developed and used on Windows. macOS and Linux are covered by automated tests. If you hit a problem there, please [open an issue](https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit/issues).
 
 | | Windows | macOS | Linux |
 |---|---|---|---|
-| **Tested** | Windows 11, Edge | Automated tests on GitHub's macOS runners | Automated tests on GitHub's Linux runners, Node 20 and 22 |
-| **Video encoder** | NVIDIA, Intel or AMD hardware, else processor | VideoToolbox, else processor | NVIDIA, Intel or AMD hardware if ffmpeg supports it, else processor |
-| **Folder dialog** | built in | built in | needs `zenity` or `kdialog`; otherwise paste a folder path |
-| **4K HEVC from phones and cameras** | Edge needs the "HEVC Video Extensions" add-on to play them directly; otherwise the kit makes small copies | plays directly in Safari and Chrome | Chrome and Firefox usually cannot; the kit makes small copies |
-| **Browser** | Edge, Chrome, Brave | Chrome, Edge, Brave, Safari | Chrome, Chromium, Edge, Brave, Firefox |
+| **Folder dialog** | built in | built in | needs `zenity` or `kdialog`, otherwise paste the folder path |
+| **4K HEVC camera files** | play directly with the "HEVC Video Extensions" from the Microsoft Store, otherwise the kit makes small copies | play directly | the kit makes small copies |
+| **Browser for the app window** | Edge, Chrome or Brave | Chrome, Edge, Brave or Safari | Chrome, Chromium, Edge, Brave or Firefox |
 
-The interface is developed against Chromium browsers. Safari and Firefox should work but are less tested; if something looks off there, please open an issue.
+## First steps
 
-## First session
+1. **Choose your film folder.** The kit adds one small file to it, `letzai-kit.json`. Your footage is only renamed or cut when you ask for it.
+2. **Name your clips** in *Ingest*. A camera file like `A001_C047.mov` becomes `YourFilm-scene6-shot2-take1.mov`. Subfolders and your camera's `Proxy` folder are found automatically.
+3. **Write your shot list** (*Dashboard → ⋯ → Shot list…*), or start from what you have already shot. The Dashboard then shows what is missing.
+4. **Review your takes.** Rate them with `1` `2` `3`, mark the one you want with `P`, and add notes. `Ctrl K` (`Cmd K` on a Mac) jumps to any shot.
+5. **Connect LetzAI** in *Canvas*: paste your LetzAI API key, choose your canvas, tick takes and press *Cut and send*.
 
-1. **Choose your film folder.** The kit adds one small file, `letzai-kit.json`, to it. Your footage is not moved or changed unless you rename or cut it here.
-2. **Name the raw clips** in *Ingest*. Camera files like `A001_10171033_C047.mov` become `YourFilm-scene6-shot2-take1.mov`. To name many at once, press **Name several…** (see below). Subfolders and your camera's own `Proxy` folder are picked up automatically.
-3. **Write the shot list** (*Dashboard → Shot list*), or press *Use what's shot so far* and add the shots you still owe. The Dashboard now shows what is missing. **Add scene** (below the last scene) creates a whole scene in one step.
-4. **Review** the takes. Rate with `1` `2` `3`, circle the keeper with `P`, add notes. `Ctrl K` (`Cmd K` on a Mac) jumps to any shot.
-5. **Connect LetzAI** in *Canvas*: paste your API key, pick the canvas, select takes, press *Cut and send*.
+## A tour
 
-## The tour
+### Dashboard
 
-### Dashboard and folders
+The Dashboard is the home screen. *By scene* shows each shot as a card, *By folder* shows your shoot days, and *All clips* is a list where you can tick takes. The folder button at the top shows only one folder.
 
-The Dashboard is home. Three numbers show what is covered (and missing), what still needs a review, and what is on the canvas. *By scene* shows every shot as a card; *By folder* shows your shoot days and subfolders; *All clips* is a table you can tick takes in. The folder button limits any view to one folder.
+The **⋯** menu at the top has the shot list, *Add scene…*, CSV reports, *Rename all files…* and *Copy printed takes*. Each scene has its own **⋯** menu with *Add shot…* and *Rename takes…*.
 
 ![By folder: one card per shoot day](docs/screenshots/folders.png)
 
 ### Review
 
-Frame-accurate stepping (`←` `→`), speeds (`J` `K` `L`), in and out points (`I` `O`), cuts (`Enter`), markers (`M`), ratings (`1` `2` `3`), print (`P`), and a take strip along the bottom. `C` compares two takes side by side, `T` hides the side panels for a bigger picture.
+Step frame by frame (`←` `→`), change speed (`J` `K` `L`), set in and out points (`I` `O`), make cuts (`Enter`), add markers (`M`), rate (`1` `2` `3`) and mark the take you want (`P`). `C` compares two takes side by side, and `T` hides the side panels for a bigger picture.
 
-![Review: rate, print, cut](docs/screenshots/review.png)
+![Review: rate, mark, cut](docs/screenshots/review.png)
 
-![Compare two takes in focus mode](docs/screenshots/compare.png)
+![Compare two takes](docs/screenshots/compare.png)
 
 ### Compare: original vs AI
 
-Generated a restyled version of a take? Map it to the original and see exactly what changed.
+Made an AI version of a take? Put it next to the original and see what changed.
 
-1. Open **Compare** (`g` then `m`) and press **Add AI results…**. Choose the video files, pick them **from the canvas** (generations on your LetzAI Canvas), or paste an `https://` link. The kit guesses the take from the file name (`...scene6_shot2_take3_cut-2_v1.mp4`, the full take name, or the camera clip name); change it in the take menu if it guessed wrong or could not tell.
-2. An AI clip is usually made from a *piece* of the take, such as snippet 2 you sent to the canvas. Say which snippet (or how many seconds into the take it starts) and both videos play in step. You can nudge the offset frame by frame.
-3. Judge it. **Slider**: drag the divider, original on one side, AI on the other. **Side**: both next to each other. **Fade**: cross-fade between them. **Diff**: shows what changed, brightened. Several AI versions of one take sit in a strip below; switch between them to pick the best.
+1. Open **Compare** and press **Add AI results…**. Choose video files, pick them from your LetzAI Canvas, or paste a link. The kit guesses which take each one belongs to from its file name; you can change that.
+2. An AI video is usually made from one snippet of a take. Say which snippet, and both videos play in step. You can adjust the start frame by frame.
+3. Compare them with **Slider**, **Side by side**, **Fade** or **Difference** (which highlights what changed). Several AI versions of one take appear in a strip below, so you can pick the best.
 
 ![Slider: original on the left, AI version on the right](docs/screenshots/ai-compare.png)
 
-![Difference view highlights what the AI changed](docs/screenshots/ai-compare-diff.png)
+![The difference view highlights what the AI changed](docs/screenshots/ai-compare-diff.png)
 
-Notes and labels are saved per AI result. Removing a result only forgets the mapping; the video file is never touched, and the mapping follows the take when you rename it.
+Removing an AI result only removes the link to the take; the video file stays where it is.
 
-### Ingest: naming clips from the slate
+### Ingest: naming clips
 
-Each unnamed clip shows a big frame to read the slate from (click to enlarge; the buttons jump to later frames in case the slate comes in late). Type scene, shot and take, press `Enter`, and the next clip appears. The kit predicts the next take, warns about duplicates, and everything is undoable (`Ctrl Z`).
+Each clip without a name shows a large frame so you can read the slate. Click it to enlarge it; the buttons below jump further into the clip if the slate comes later. Type scene, shot and take, press `Enter`, and the next clip appears. The kit suggests the next take number, warns about duplicates, and `Ctrl Z` undoes a rename.
 
 ![Ingest: read the slate, type, Enter](docs/screenshots/ingest.png)
 
-**Name several.** Press **Name several…** at the top of the list. It is the one place to name many clips, in two ways:
+**Name several clips at once** with **Name several…** at the top of the list:
 
-- **Type the slate.** Every unnamed clip is listed with a checkbox and the name it would get. Type the scene and shot, set the first take, and the takes count up in recording order (or choose *One shot each*). Press **Rename**.
-- **Claude reads the slates.** Tick the clips and Claude suggests a name for each (see below). Switch on *Also check clips that already have a name* to re-check named takes too, for example a whole shoot day (pick the folder first).
+- **Type the slate.** Type the scene and shot once and set the first take. The takes count up in the order they were recorded (or choose *One shot each*). You see every new name before you press **Rename**.
+- **Let the AI read the slates.** See [AI slate reading](#ai-slate-reading). Switch on *Also check clips that already have a name* to check names you gave earlier.
 
-Names that exist already are never overwritten, and one **Undo** reverses the batch. Shortcut: `Ctrl K` → "Name several clips".
+Existing names are never overwritten, and one **Undo** reverses the whole batch.
 
 ![Name several clips at once](docs/screenshots/batch-rename.png)
 
 ### Renaming takes that already have a name
 
-- **Review → Rename ▾**: *This take*, *Whole shot* or *Whole scene*.
-- **Dashboard → By scene**: the **Rename** button on each scene.
-- **Dashboard → All clips**: tick takes, then **Rename selected…**.
+- **Review → Rename ▾**: this take, the whole shot or the whole scene.
+- **Dashboard → scene ⋯ → Rename takes…**
+- **Dashboard → All clips**: tick takes, then **Rename selected…**
 
-Change the scene or shot (leave a field empty to keep it) and optionally renumber the takes. You see every new name before anything happens.
+Change the scene or shot and, if you like, renumber the takes. You see every new name first.
 
 ![Rename a whole shot](docs/screenshots/rename-takes.png)
 
-**Rename all files** (*Settings → Advanced*, *Export ▾*, or `Ctrl K`) applies the current prefix, number padding and rating tags to every take you have named.
+To apply a new prefix or number style to every file, use **Dashboard → ⋯ → Rename all files…**.
 
-### Claude: reading slates
+## AI slate reading
 
-Typing every slate by hand is the slow part of ingest. With your own Anthropic API key, Claude does the reading and you do the checking.
+Typing every slate by hand is the slow part. An AI can do the reading while you do the checking. Choose **Claude** (Anthropic), **ChatGPT** (OpenAI) or **Gemini** (Google), with your own API key from that company.
 
-1. **Add a key.** *Settings → Claude: reading slates*, or just start a reading and the dialog asks for it. Create the key in the [Anthropic Console](https://console.anthropic.com/settings/keys) (the account needs some credit). The key is tested when you save it, and stored only on your computer.
-2. **Choose the clips.** *Ingest → Name several… → Claude reads the slates*, or *Read slate with Claude* on a single clip. For one **named take**, use *Review → Rename ▾ → Check this name with Claude*.
-3. **Confirm what is sent.** The dialog shows how many clips and roughly how many tokens, lets you pick the model (Sonnet by default, Haiku is cheaper, Opus more careful) and asks you to agree that frames are sent to Anthropic. About six pictures from the start of each clip are sent; if no slate is there, six more from further in. File names are not sent.
-4. **Review the readings.** Each row shows the frame Claude read (click it to enlarge), what the slate says, the reading in three editable boxes, and how sure Claude is. Readings are flagged when the take already exists, another clip was read as the same take, the scene is not in your shot list, the number does not fit the recording order, or Claude is not sure. Confident, unflagged readings can be ticked in one click. Press **Rename** to apply them; it is one undo.
+1. **Add a key.** In *Settings → AI slate reading*, choose the AI and paste your key, or start a reading and the dialog asks for it. Get a key from the [Anthropic Console](https://console.anthropic.com/settings/keys), the [OpenAI dashboard](https://platform.openai.com/api-keys) or [Google AI Studio](https://aistudio.google.com/apikey). The key is tested when you save it and stays on your computer.
+2. **Choose the clips.** In *Ingest*, press *Name several…* and switch to *Claude reads the slates* (the button names the AI you chose), or use *Read slate with Claude* on a single clip. To check a take that already has a name: *Review → Rename ▾ → Check this name with Claude*.
+3. **Confirm.** Before anything is sent, you see how many clips will be read and roughly how big the request is. You can pick the model and must agree that frames are sent to that company. About six frames from the start of each clip are sent (six more if no slate is found). File names are not sent.
+4. **Check the results.** Each row shows the frame that was read (click to enlarge), what the slate says, the suggested scene, shot and take (you can edit them), and how sure the AI is. Rows are flagged when the take already exists, two clips were read as the same take, the scene isn't in your shot list, the numbers don't fit the recording order, or the AI isn't sure. Tick the ones you want and press **Rename**. One undo reverses it.
 
-![Claude's readings: check, correct, apply](docs/screenshots/claude-slates.png)
+![Check, correct and apply the readings](docs/screenshots/claude-slates.png)
 
-Claude never guesses a number it cannot read: those clips come back as "no readable slate" for you to look at. Results are saved with the clip, so reading it again only happens when you ask for it (the *read again* switch). For named takes, rows that agree with the file name are collapsed into a count, and only the ones that differ ask for your attention.
-
-### Canvas
-
-Cut takes into snippets and send them to LetzAI. See [The LetzAI Canvas connection](#the-letzai-canvas-connection).
+When a slate can't be read, the AI says so instead of guessing, and the clip is listed for you to check. Results are saved, so a clip is only read again when you ask for it, and you don't pay twice. The AI company's usage page shows what each reading cost.
 
 ## The shot list
 
-Plain text, one shot per line. The preview next to it shows exactly what the Dashboard will track.
+Plain text, one shot per line. The preview next to it shows what the Dashboard will track.
 
 ```
 Scene 6 - Kitchen
 6.1  Wide, Mira enters  [WS]
 6.2A Close on the cup   [CU]
-?6.4 Optional insert        # a leading ? makes a shot optional
-6.5-8                       # a range creates shots 5, 6, 7 and 8
+?6.4 Optional insert        # a ? in front makes a shot optional
+6.5-8                       # shots 5, 6, 7 and 8
 
 Scene 7 - Street
 7.1-3
 ```
 
-Inside a scene header you can leave the scene number out (`2A  Close on the cup`). Without a shot list the Dashboard still spots holes in your numbering (shots 1, 2 and 4 means 3 is flagged).
+Under a scene heading you can leave out the scene number (`2A  Close on the cup`). Even without a shot list, the Dashboard notices gaps in your numbering: with shots 1, 2 and 4, shot 3 is flagged.
 
 ## Keyboard
 
-On a Mac, `Ctrl` is `Cmd`.
+On a Mac, use `Cmd` instead of `Ctrl`.
 
 | Anywhere | |
 |---|---|
@@ -238,12 +222,12 @@ On a Mac, `Ctrl` is `Cmd`.
 
 | Review | | | |
 |---|---|---|---|
-| `Space` / `K` | play, pause | `1` `2` `3` | void, ok, good |
-| `J` / `L` | slower, faster | `P` | print this take |
+| `Space` / `K` | play, pause | `1` `2` `3` | rate: void, ok, good |
+| `J` / `L` | slower, faster | `P` | mark as the take to use |
 | `←` `→` | one frame (`Shift`: one second) | `[` `]` | previous, next take |
 | `I` `O` | in point, out point | `{` `}` | previous, next shot |
-| `Enter` | add cut from in to out | `C` | compare with the next take |
-| `M` | marker | `T` | focus (hide side panels) |
+| `Enter` | add a cut from in to out | `C` | compare with the next take |
+| `M` | marker | `T` | hide side panels |
 | `S` | send to canvas | `F` | full screen |
 
 | Compare | | | |
@@ -255,90 +239,88 @@ On a Mac, `Ctrl` is `Cmd`.
 
 | Ingest | |
 |---|---|
-| `Enter` | apply the name, go to the next clip |
+| `Enter` | apply the name, next clip |
 | `Tab` | next field |
 | `Esc` | skip |
 | `Ctrl Z` | undo the last rename |
 
-## How files are named and renamed
+## File names
 
 ```
 <Prefix>-scene<S>-shot<H>-take<T>.<ext>        MyFilm-scene6-shot2A-take3.mov
 ```
 
-- The prefix and number padding are set per project (*Settings → Naming*).
-- Ratings and print flags live in the project file, so a name never changes when you change your mind. Prefer the old style (`...-take3-good-print.mov`)? Turn on *Put the rating in the file name*.
-- A second clip carrying a take that already exists can be kept as a duplicate: `...-take3-dupC149.mov`.
-- Cut snippets go into a `cuts` folder next to the take: `...-take3-cut-1.mp4`, `-cut-2`, and so on. Renaming a take renames its cuts and its camera proxy with it.
-- Renames are safe: files move through temporary names (swaps and chains cannot collide), everything is rolled back if one step fails, a file that is briefly locked by Dropbox or a preview is retried for several seconds, and every rename is one undo.
+- The prefix is set in *Settings → Project*, and the number style (`6` or `06`) under *Settings → Advanced*.
+- Ratings and notes are saved in the project file, so a file name never changes when you change your mind. If you'd like the rating in the name (`...-take3-good-print.mov`), switch it on under *Advanced*.
+- Cut snippets go into a `cuts` folder next to the take (`...-take3-cut-1.mp4`). When you rename a take, its snippets and camera proxy are renamed with it.
+- Renaming is safe: if anything goes wrong, all changes are put back, and every rename can be undone. A file that is briefly in use (for example by Dropbox) is tried again.
 
-## The LetzAI Canvas connection
+## Sending to a LetzAI Canvas
 
-The kit talks to the public LetzAI API (`https://api.letz.ai`) with your own key. It never sends your key anywhere else. Get a key at [letz.ai/subscription](https://letz.ai/subscription), paste it into *Canvas → API key*, then choose your canvas.
+The kit uses the LetzAI API with your own key. Get a key at [letz.ai/subscription](https://letz.ai/subscription), paste it into *Canvas*, then choose your canvas.
 
-- **Two layouts.** *One page*: everything goes to one page, each scene under a text node called `Scene N`. *Page per scene*: each scene goes to the page named after it (`Scene 6`, `Scene 14`…), in a grid below what is already there. The kit suggests the second when your canvas has pages like that. LetzAI's API cannot create pages, so a scene without a page is reported ("add a page called Scene 9") instead of being sent somewhere surprising. **Copy names** and **Open canvas** buttons help you add them.
-- **What gets uploaded.** Only the snippets you send. Pictures are scaled to at most 1080p by default (configurable), clips are never scaled up, and each snippet is at most 30 seconds.
-- **Order.** Three clips per row, ordered by shot, take and cut, each with a caption. The kit only moves nodes it created (they carry a `ltn:` id), never yours.
-- **No duplicates, no stale clips.** A clip with the same file name is not uploaded twice. If you cut a take again, the changed snippet replaces the old one.
-- **Errors are never swallowed.** Each upload is checked: the upload link, the bytes that arrived (compared with the file size on LetzAI), and the nodes that were created. Network problems, rate limits and stalled transfers are retried. One bad snippet does not stop the rest of its take. Whatever still fails stays on the take with the reason, shown in the top bar, on the Dashboard, in Review and on the Canvas page, with **Retry**.
+- **One page or one page per scene.** On *one page*, each scene gets a heading. With *page per scene*, each scene goes to its own page (`Scene 6`, `Scene 14`, …). The LetzAI API cannot create pages, so if a scene has no page yet, the kit tells you which page to add.
+- **What is uploaded.** Only the snippets you send, up to 30 seconds each, scaled down to 1080p by default.
+- **Order.** Three clips per row, sorted by shot, take and cut, each with a caption. The kit only moves clips it added itself, never your own work.
+- **No duplicates.** A snippet is never uploaded twice. If you cut a take again, the new snippet replaces the old one.
+- **Failed uploads.** Every upload is checked. If one fails, the take shows the reason and a **Retry** button.
 
-## Playback, 4K and HEVC
+## Playing 4K and HEVC clips
 
-Phones and many cameras record 4K HEVC (H.265), which most browsers cannot play. The kit plays the original when it can, uses your camera's own `Proxy` file when there is one, and otherwise makes a small 720p copy (once, cached). By default it prepares those copies **in the background**, unnamed clips first, using one stream so your computer stays usable. The top bar shows "Preparing playback · N left · about X min" and a click on it pauses or resumes. Opening a clip jumps it to the front of the queue. *Settings → Playback* switches it off.
+Phones and many cameras record 4K HEVC (H.265), which most browsers can't play. The kit uses your camera's own proxy files when there are any. Otherwise it makes a small playable copy of each clip in the background. The top bar shows how many are left, and a click pauses or resumes. *Settings → Playback* turns this off.
 
-For instant playback with no copies: on Windows install **HEVC Video Extensions** from the Microsoft Store (paid, or free from your PC maker); on macOS Safari and Chrome already play HEVC.
+For instant playback without copies: on Windows, install **HEVC Video Extensions** from the Microsoft Store. On macOS these files already play.
 
 ## Your data and privacy
 
 | What | Where |
 |---|---|
-| Ratings, notes, cuts, markers, shot list, naming and canvas settings, rename history | `letzai-kit.json` in your film folder. Plain JSON, safe to sync or commit. |
-| Review copies, thumbnails, probe cache | Your user cache folder. Safe to delete. |
-| LetzAI API key | Your user settings folder, never in the film folder. The `LETZAI_API_KEY` environment variable also works. |
-| Anthropic API key (optional) | Your user settings folder (`anthropic.key`, readable only by you), never in the film folder. The `ANTHROPIC_API_KEY` environment variable also works. |
-| What Claude read from slates | In `letzai-kit.json`, next to the clip. |
+| Ratings, notes, cuts, markers, shot list, AI readings | `letzai-kit.json` in your film folder |
+| Playable copies and thumbnails | your computer's cache folder (safe to delete) |
+| LetzAI and AI API keys | your user settings folder, readable only by you, never in the film folder |
 
-The server listens on `127.0.0.1` only. Every request needs a random key from the launch link, and requests with a foreign `Host` header are refused, so other websites cannot talk to it. Nothing leaves your computer except what you send to your canvas, and, only if you add an Anthropic key and confirm it, the few frames per clip that Claude reads (sent to `api.anthropic.com`, never anywhere else). Without a key the Claude buttons only offer to set one up.
+The kit only runs on your computer, and other websites can't access it. Nothing is uploaded except:
 
-## Troubleshooting
+- the snippets you send to your LetzAI Canvas, and
+- if you use AI slate reading, a few frames per clip, sent only to the AI company you chose.
+
+API keys can also come from environment variables: `LETZAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GEMINI_API_KEY`.
+
+## When something goes wrong
 
 | | |
 |---|---|
-| **`npm run check` says ffmpeg is missing** | Install it (see [Install](#1-install-nodejs-and-ffmpeg)), reopen the terminal, check again. Unusual location? Set `LETZAI_KIT_FFMPEG` to its folder. |
-| **"Node.js 20 or newer is needed"** | Update Node.js. On Linux the distribution's package is often old: use [nodejs.org](https://nodejs.org/en/download) or `nvm`. |
-| **A clip says "Preparing a review copy"** | It is a 4K camera file your browser cannot play directly. A small copy is being made (10 to 60 seconds); the kit prepares the rest in the background. See [Playback](#playback-4k-and-hevc). |
-| **A rename says a file is "in use by another program"** | Dropbox, OneDrive or another program is reading it. The kit already waited and retried; nothing was changed. Wait until syncing finishes and try again. |
-| **An upload failed** | Open *Canvas*. The failed take is listed with the reason and *Retry* sends only what is missing. "Scene N has no page" means the canvas has no page of that name: add one in LetzAI and press *Check again*. |
-| **Opens in a tab, not a window** | No Chrome, Edge or Brave was found, so your default browser is used. It works the same. Add `--browser` to always use it. |
-| **No folder dialog (Linux)** | Install `zenity` (or `kdialog` on KDE), or paste the folder path. |
-| **Port in use** | `npm start -- --port 5000`. The kit also picks the next free port by itself. |
-| **The window looks outdated after an update** | Reload it (`Ctrl R`). The kit reloads the page by itself when it restarts. |
-| **Still stuck** | Run `npm run check` and open an [issue](https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit/issues) with its output. |
-
-## Coming from an older naming script
-
-Open the same folder as a project, then *Settings → Import ratings from the old namer* to bring over ratings, print flags and notes from `continuity-log.csv`. Files named like `...-take3-good-print.mov` are understood as they are, and `cuts` folders and canvas nodes created by the old tool are recognised, so nothing is uploaded twice.
+| **`npm run check` says ffmpeg is missing** | Install it (see [Install](#1-install-nodejs-and-ffmpeg)), reopen the terminal and check again. |
+| **"Node.js 20 or newer is needed"** | Update Node.js from [nodejs.org](https://nodejs.org/en/download). |
+| **A clip says "Preparing a playable copy"** | Your browser can't play that camera file directly. A small copy is being made, which takes 10 to 60 seconds. See [4K and HEVC](#playing-4k-and-hevc-clips). |
+| **A rename says a file is in use** | Dropbox, OneDrive or another program is reading it. Nothing was changed. Wait until syncing has finished and try again. |
+| **The AI key is not accepted, or there is no credit** | Check the key in *Settings → AI slate reading*. Most AI companies need some prepaid credit on the account. |
+| **An upload failed** | Open *Canvas*: the take shows the reason, and *Retry* sends what is missing. "Scene N has no page" means you need to add a page with that name in LetzAI. |
+| **It opens in a browser tab, not a window** | That's fine, it works the same. The kit uses your normal browser when it can't find Chrome, Edge or Brave. |
+| **Port already in use** | `npm start -- --port 5000` |
+| **The window looks outdated after an update** | Reload it with `Ctrl R`. |
+| **Still stuck** | Run `npm run check` and [open an issue](https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit/issues) with what it says. |
 
 ## Development
 
 ```bash
-npm test                # unit, integration and HTTP tests (needs ffmpeg for the media tests)
-npm run dev             # restart the server on file changes
-npm run demo            # the synthetic demo film
-npm run check           # is this computer ready?
+npm test        # all tests (the video tests need ffmpeg)
+npm run dev     # restart the server when files change
+npm run demo    # the sample film
+npm run check   # is this computer ready?
 ```
 
-No build step and no runtime dependencies: the server is plain Node (`server/`), the interface is plain ES modules (`ui/`). The test suite runs on Windows, macOS and Linux with Node 20 and 22 in [CI](.github/workflows/ci.yml); upload and error handling are tested against a fake LetzAI server that can refuse, truncate, stall and rate-limit on demand.
+Plain Node.js on the server (`server/`) and plain JavaScript modules in the interface (`ui/`), with no build step and no dependencies. The tests run on Windows, macOS and Linux on every push. The LetzAI and AI APIs are replaced by local stand-ins in the tests, so they never call the real services.
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it works
-- [docs/ROADMAP.md](docs/ROADMAP.md): ideas for where it could go
-- [CONTRIBUTING.md](CONTRIBUTING.md): ground rules and how to contribute
-- [docs/BRANDING.md](docs/BRANDING.md): design system and trademark notes
+- [docs/ROADMAP.md](docs/ROADMAP.md): ideas for what's next
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to contribute
+- [docs/BRANDING.md](docs/BRANDING.md): design and trademark notes
 
 ## Brand
 
-The interface follows the [LetzAI brand guidelines](https://www.letz.ai/brandguidelines) and design system: monochrome, Inter, one filled action per surface. The LetzAI **L** in the top bar uses the official files, unchanged; the wordmark and lockup are not included.
+The interface follows the [LetzAI brand guidelines](https://www.letz.ai/brandguidelines). The LetzAI **L** in the top bar uses the official files, unchanged.
 
 ## License
 
-[MIT](LICENSE). "LetzAI" and its logos are not covered by that license.
+[MIT](LICENSE). The LetzAI name and logos are not covered by this license.

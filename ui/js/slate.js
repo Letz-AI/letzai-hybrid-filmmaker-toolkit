@@ -1,14 +1,19 @@
-// Reading slates with Claude: set up the key, confirm what is sent, watch it run, check the readings, apply the names.
-// The same dialog serves unnamed clips (suggest names) and named takes (check that the names are right).
+// Reading slates with an AI (Claude, ChatGPT or Gemini): pick the AI and add its key, confirm what is sent, watch it run,
+// check the readings, apply the names. The same dialog serves unnamed clips (suggest names) and named takes (check them).
 import { html, icon, mount, plural, fmtClock } from './lib.js';
 import { get, post, put } from './api.js';
 import { S, clip, loadLibrary, loadInfo, subscribeJobs } from './store.js';
 import { openPopup, toast, toastError, field } from './ui.js';
 
-export const CONSOLE_KEYS = 'https://console.anthropic.com/settings/keys';
+/** The AI in use, by name ("Claude", "ChatGPT", "Gemini"), for buttons and hints. */
+export const aiName = () => (S.info && S.info.vision && S.info.vision.label) || 'AI';
+
+/** Claude / ChatGPT / Gemini, as a segmented control; buttons carry data-prov. */
+export const providerPicker = (v) => html`<div class="app-segmented" role="radiogroup" aria-label="AI" style="width:max-content">${v.providers.map((x) => html`<button role="radio" aria-checked="${x.id === v.provider}" data-prov="${x.id}" title="${x.company}">${x.label}</button>`)}</div>`;
+export const currentProvider = (v) => v.providers.find((x) => x.id === v.provider);
 
 const FLAG_TEXT = {
-  low: 'Claude is not sure',
+  low: 'The AI is not sure',
   partial: 'Only part of the slate could be read',
   taken: 'That take already exists',
   twice: 'Another clip was read as the same take',
@@ -37,21 +42,34 @@ function watchLater(jobId, keys) {
 /**
  * @param {{keys: string[], title?: string, force?: boolean, view?: string}} opts clips to read; force = read again even if already read; view 'results' only shows what was read before
  */
-export async function openSlateReader({ keys, title = 'Read slates with Claude', force = false, view = '' } = {}) {
+export async function openSlateReader({ keys, title = '', force = false, view = '' } = {}) {
   if (!keys || !keys.length) { toast('Pick at least one clip.'); return; }
   let v;
   try { v = await get('/api/vision'); } catch (e) { toastError(e); return; }
+  if (!title) title = `Read slates with ${v.label}`;
   let again = !!force;
   let watching = null;
   const p = openPopup({ title, width: 780, body: html`<div></div>`, foot: html`<span></span>`, onClose: () => { if (watching) { watchLater(watching, keys); watching = null; } } });
 
   const alertBox = (msg) => html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow">${msg}</div></div>`;
+  // switching the AI: without a key for it, ask for one; otherwise show what will be sent
+  const pickProvider = async (id) => {
+    if (id === v.provider) return;
+    const before = v.label;
+    try { v = await put('/api/vision', { provider: id }); await loadInfo(); } catch (e) { toastError(e); return; }
+    const t = p.el.querySelector('.popup-title');
+    if (t) t.textContent = t.textContent.replace(before, v.label);
+    if (v.key.set) stepConfirm(); else stepSetup();
+  };
+  p.el.addEventListener('click', (e) => { const b = e.target.closest('[data-prov]'); if (b) pickProvider(b.dataset.prov); });
 
   // 1. no key yet
   function stepSetup(msg) {
+    const pv = currentProvider(v);
     mount(p.body, html`<div style="display:grid;gap:14px">
-      <p class="muted" style="margin:0">Claude reads each slate and suggests a name, using your own Anthropic key. Nothing is renamed until you confirm.</p>
-      ${field('Anthropic API key', html`<input class="app-input" id="slKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">`, html`Get one in the <a href="${CONSOLE_KEYS}" target="_blank" rel="noopener">Anthropic Console</a>.`)}
+      <p class="muted" style="margin:0">An AI reads each slate and suggests a name, using your own API key. Nothing is renamed until you confirm.</p>
+      ${field('AI', providerPicker(v))}
+      ${field(`${pv.company} API key`, html`<input class="app-input" id="slKey" type="password" placeholder="${pv.keyHint}" autocomplete="off" spellcheck="false">`, html`Get one in the <a href="${pv.keyUrl}" target="_blank" rel="noopener">${pv.keyPage}</a>.`)}
       <div id="slErr">${msg ? alertBox(msg) : ''}</div></div>`);
     mount(p.foot, html`<button class="app-btn" data-no>Cancel</button><button class="app-btn app-btn--primary" id="slSave">Save and test key</button>`);
     p.foot.querySelector('[data-no]').addEventListener('click', p.close);
@@ -60,7 +78,7 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
     const save = async () => {
       if (!input.value.trim()) { input.focus(); return; }
       go.disabled = true; go.textContent = 'Testing…';
-      try { v = await post('/api/vision/test', { key: input.value.trim(), save: true, model: v.model }); await loadInfo(); stepConfirm(); } catch (e) { go.disabled = false; go.textContent = 'Save and test key'; mount(p.body.querySelector('#slErr'), alertBox(e.message)); }
+      try { v = await post('/api/vision/test', { provider: v.provider, key: input.value.trim(), save: true, model: v.model }); await loadInfo(); stepConfirm(); } catch (e) { go.disabled = false; go.textContent = 'Save and test key'; mount(p.body.querySelector('#slErr'), alertBox(e.message)); }
     };
     go.addEventListener('click', save);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
@@ -74,10 +92,11 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
     const modelNote = (id) => (v.models.find((m) => m.id === id) || {}).note || '';
     mount(p.body, html`<div style="display:grid;gap:14px">
       <div><b>${est.clips ? `${plural(est.clips, 'clip')} will be read` : 'Nothing new to read'}</b>
-        <div class="muted">${est.clips ? `About ${plural(est.frames, 'frame')} and ${Math.round(est.inputTokens / 1000)}k input tokens in all. Your Anthropic usage page shows the exact cost.` : 'Every clip here was read already.'}</div></div>
+        <div class="muted">${est.clips ? `About ${plural(est.frames, 'frame')} and ${Math.round(est.inputTokens / 1000)}k input tokens in all. Your ${v.company} usage page shows the exact cost.` : 'Every clip here was read already.'}</div></div>
+      ${field('AI', providerPicker(v))}
       ${est.skipped || again ? html`<label class="app-switch"><input type="checkbox" id="slAgain" ${again ? 'checked' : ''}><span>Read clips again that were read before${est.skipped ? html`<br><span class="faint">${plural(est.skipped, 'clip')} already ${est.skipped === 1 ? 'has' : 'have'} a reading and would be skipped.</span>` : ''}</span></label>` : ''}
       ${field('Model', html`<select class="app-input" id="slModel">${v.models.map((m) => html`<option value="${m.id}" ${m.id === v.model ? 'selected' : ''}>${m.label}</option>`)}</select>`, html`<span id="slModelNote">${modelNote(v.model)}</span>`)}
-      <label class="app-switch"><input type="checkbox" id="slConsent" ${v.consent ? 'checked' : ''}><span>Send frames from my clips to Anthropic<br><span class="faint">A few frames per clip. File names are not sent.</span></span></label>
+      <label class="app-switch"><input type="checkbox" id="slConsent" ${v.consent ? 'checked' : ''}><span>Send frames from my clips to ${v.company}<br><span class="faint">A few frames per clip. File names are not sent.</span></span></label>
       <div id="slErr"></div></div>`);
     mount(p.foot, html`${hasReadings(keys) ? html`<button class="app-btn" id="slSee">Review earlier readings</button>` : ''}<span class="grow"></span><button class="app-btn" data-no>Cancel</button><button class="app-btn app-btn--primary" id="slGo">${est.clips ? `Read ${plural(est.clips, 'clip')}` : 'Nothing to read'}</button>`);
     const go = p.foot.querySelector('#slGo');
@@ -141,7 +160,7 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
         <div class="row wrap" style="gap:8px"><b>${todo.length ? plural(todo.length, 'suggestion') : 'No changes to suggest'}</b><span class="faint">${[matching.length && `${matching.length} already correct`, unreadable.length && `${unreadable.length} without a readable slate`, unread.length && `${unread.length} not read`].filter(Boolean).join(' · ')}</span></div>
         ${todo.length ? html`<div class="rename-list slate-list" style="max-height:400px">${todo.map((r) => { const st = state.get(r.k); return html`<div class="slate-row" data-row="${r.k}">
           <input type="checkbox" class="app-check" data-on="${r.k}" ${st.on ? 'checked' : ''} aria-label="Use this reading">
-          <button class="mini-poster slate-poster" data-zoom="${r.k}" title="Look at the frame Claude read"><img loading="lazy" alt="" src="${frame(r, 240)}"></button>
+          <button class="mini-poster slate-poster" data-zoom="${r.k}" title="Look at the frame that was read"><img loading="lazy" alt="" src="${frame(r, 240)}"></button>
           <span style="min-width:0"><span class="mono-name">${r.c.kind === 'shot' ? `${r.c.scene}.${r.c.shot} take ${r.c.take}` : (r.c.orig || r.c.name)}</span><div class="faint" style="font-size:11px">${[r.c.kind === 'shot' ? 'now named' : fmtClock(r.c.recordedAt), `slate says “${r.s.evidence || '…'}”`].filter(Boolean).join(' · ')}</div></span>
           <span class="faint">${icon('arrowRight', 14)}</span>
           <span class="row" style="gap:4px"><input class="app-input slt-in" data-f="scene" data-k="${r.k}" value="${st.scene}" aria-label="Scene" maxlength="6"><input class="app-input slt-in" data-f="shot" data-k="${r.k}" value="${st.shot}" aria-label="Shot" maxlength="6"><input class="app-input slt-in" data-f="take" data-k="${r.k}" value="${st.take}" aria-label="Take" maxlength="4" inputmode="numeric"></span>
@@ -152,7 +171,7 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
         ${!rows.length ? html`<div class="faint">Nothing to show.</div>` : ''}
       </div>`);
       const n = [...state.values()].filter((s) => s.on).length;
-      mount(p.foot, html`${todo.length ? html`<button class="app-btn app-btn--sm" id="slTick">Tick the confident ones</button><button class="app-btn app-btn--sm" id="slTickAll" title="Tick every row, including ones Claude is unsure about or that are flagged">Tick all ${todo.length}</button>` : ''}<span class="grow"></span><button class="app-btn" data-no>Close</button>${todo.length ? html`<button class="app-btn app-btn--primary" id="slApply" ${n ? '' : 'disabled'}>${n ? `Rename ${plural(n, 'clip')}` : 'Tick what to rename'}</button>` : ''}`);
+      mount(p.foot, html`${todo.length ? html`<button class="app-btn app-btn--sm" id="slTick">Tick the confident ones</button><button class="app-btn app-btn--sm" id="slTickAll" title="Tick every row, including unsure or flagged ones">Tick all ${todo.length}</button>` : ''}<span class="grow"></span><button class="app-btn" data-no>Close</button>${todo.length ? html`<button class="app-btn app-btn--primary" id="slApply" ${n ? '' : 'disabled'}>${n ? `Rename ${plural(n, 'clip')}` : 'Tick what to rename'}</button>` : ''}`);
       p.foot.querySelector('[data-no]').addEventListener('click', p.close);
       const apply = p.foot.querySelector('#slApply');
       if (apply) apply.addEventListener('click', doApply);
@@ -197,7 +216,7 @@ export async function openSlateReader({ keys, title = 'Read slates with Claude',
   else stepConfirm();
 }
 
-/** Show readings that exist already, without calling Claude. */
+/** Show readings that exist already, without calling the AI. */
 export async function openReadings(keys) {
   if (!hasReadings(keys)) { toast('Nothing has been read yet.'); return; }
   return openSlateReader({ keys, title: 'Slate readings', view: 'results' });

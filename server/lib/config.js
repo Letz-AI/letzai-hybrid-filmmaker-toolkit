@@ -23,7 +23,6 @@ function cacheDir() {
 
 const configFile = () => path.join(configDir(), 'config.json');
 const keyFile = () => path.join(configDir(), 'letzai.key');
-const anthropicKeyFile = () => path.join(configDir(), 'anthropic.key');
 
 function loadConfig() {
   return { recent: [], ...readJson(configFile(), {}) };
@@ -58,35 +57,57 @@ async function setKey(key) {
   fs.writeFileSync(keyFile(), k, { mode: 0o600 });
 }
 
-/** Anthropic (Claude) key for reading slates: environment first, then a user-only file. Never leaves this computer except to api.anthropic.com. */
-function getAnthropicKey() {
-  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY.trim();
-  try { return fs.readFileSync(anthropicKeyFile(), 'utf8').trim() || null; } catch { return null; }
+/**
+ * AI keys for reading slates (anthropic, openai, google): environment first, then a user-only file.
+ * A key never leaves this computer except to its own provider's API.
+ */
+const VISION_KEYS = {
+  anthropic: { env: ['ANTHROPIC_API_KEY'], file: 'anthropic.key' },
+  openai: { env: ['OPENAI_API_KEY'], file: 'openai.key' },
+  google: { env: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'], file: 'gemini.key' },
+};
+const visionKey = (provider) => {
+  const k = VISION_KEYS[provider];
+  if (!k) throw new Error(`Unknown AI provider: ${provider}`);
+  return { ...k, path: path.join(configDir(), k.file), fromEnv: k.env.map((n) => process.env[n]).find((v) => v && v.trim()) };
+};
+
+function getVisionKey(provider) {
+  const k = visionKey(provider);
+  if (k.fromEnv) return k.fromEnv.trim();
+  try { return fs.readFileSync(k.path, 'utf8').trim() || null; } catch { return null; }
 }
 
-function anthropicKeySource() {
-  if (process.env.ANTHROPIC_API_KEY) return 'environment';
-  return fs.existsSync(anthropicKeyFile()) ? 'file' : null;
+function visionKeySource(provider) {
+  const k = visionKey(provider);
+  if (k.fromEnv) return 'environment';
+  return fs.existsSync(k.path) ? 'file' : null;
 }
 
-async function setAnthropicKey(key) {
+async function setVisionKey(provider, key) {
+  const p = visionKey(provider).path;
   const k = String(key || '').trim();
-  if (!k) { try { fs.unlinkSync(anthropicKeyFile()); } catch { /* already gone */ } return; }
+  if (!k) { try { fs.unlinkSync(p); } catch { /* already gone */ } return; }
   fs.mkdirSync(configDir(), { recursive: true });
-  fs.writeFileSync(anthropicKeyFile(), k, { mode: 0o600 });
+  fs.writeFileSync(p, k, { mode: 0o600 });
 }
 
-/** Per-user choices for reading slates with Claude. `consent` is the person agreeing that video frames are sent to Anthropic. */
-function visionSettings() {
+/**
+ * Per-user choices for reading slates: the provider, a model per provider, and consent per provider (the person
+ * agreeing that video frames are sent to that company). Older configs had one Claude model and one consent flag.
+ */
+function visionConfig() {
   const v = loadConfig().vision || {};
-  return { model: v.model || 'claude-sonnet-5-5', consent: !!v.consent };
+  const models = { ...(typeof v.model === 'string' ? { anthropic: v.model } : {}), ...(v.models || {}) };
+  const consent = v.consent && typeof v.consent === 'object' ? { ...v.consent } : { anthropic: !!v.consent };
+  return { provider: v.provider || 'anthropic', models, consent };
 }
 
-async function setVisionSettings(patch) {
+async function setVisionConfig(next) {
   const c = loadConfig();
-  c.vision = { ...visionSettings(), ...patch };
+  const { provider, models, consent } = { ...visionConfig(), ...next };
+  c.vision = { provider, models, consent };
   await saveConfig(c);
-  return visionSettings();
 }
 
 async function rememberProject(root, name) {
@@ -101,4 +122,4 @@ async function forgetProject(root) {
   await saveConfig(cfg);
 }
 
-module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, getAnthropicKey, anthropicKeySource, setAnthropicKey, visionSettings, setVisionSettings, rememberProject, forgetProject, APP_DIR_NAME };
+module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, getVisionKey, visionKeySource, setVisionKey, visionConfig, setVisionConfig, rememberProject, forgetProject, APP_DIR_NAME };

@@ -11,7 +11,7 @@ Where the kit could go next. Nothing here is promised; it is a list of ideas, ro
 
 ## Faster, smarter ingest
 
-- **Slate reading, next steps.** Slate reading with Claude exists (your own Anthropic key, confirmation before any rename). Still to do: other providers (an OpenAI-compatible endpoint, a local model through Ollama, the Claude Code CLI) for people without an API key, and naming clips that have no slate at all by what is in the picture, matched against the descriptions in the shot list.
+- **Slate reading, next steps.** Slate reading with Claude, ChatGPT or Gemini exists (your own API key, confirmation before any rename). Still to do: a local model (for example through Ollama) for people without an API key or who cannot send frames out, and naming clips that have no slate at all by what is in the picture, matched against the descriptions in the shot list.
 - **Clap sync and audio.** Waveform in Review, sync double-system sound to picture by the clap, and name audio files from the slate too.
 - **Offload verification.** Checksum files after copying from the card (and write a simple report), so you know the footage is safe before you format it.
 - **Watch folders.** Notice new clips as they land (card dump, Dropbox) and offer to name them, instead of on rescan.
