@@ -6,7 +6,7 @@ import { S, clip, clips, scenes, findShot, takesOf, subscribeJobs, inFolder, set
 import { toast, toastError, openMenu } from '../ui.js';
 import { folderButton, wireFolderControls } from '../folderpick.js';
 import { openRenameTakes, takesOfShot, takesOfScene } from '../renametakes.js';
-import { openSlateReader, aiName } from '../slate.js';
+import { openSlateReader, aiName, aiReady } from '../slate.js';
 import { openAddAi } from '../aiadd.js';
 
 const ls = {
@@ -248,8 +248,10 @@ function renderInspector() {
       <div class="insp-label">Canvas</div>
       ${c.canvasError ? html`<div class="app-alert app-alert--error" style="margin-bottom:10px">${icon('alert')}<div class="grow"><b>Didn’t reach the canvas</b><span style="word-break:break-word">${c.canvasError.message}</span>${(c.canvasError.files || []).slice(0, 4).map((f) => html`<div class="faint" style="font-size:12px;margin-top:4px">${f.file}</div>`)}</div></div>` : ''}
       ${c.cutFiles.length ? html`<div class="row wrap" style="margin-bottom:10px"><span class="app-chip xs ${c.onCanvas ? 'app-chip--ink' : ''}">${icon(c.onCanvas ? 'check' : 'cloud', 12)} ${c.onCanvas ? 'On canvas' : `${c.cutOnCanvas} of ${c.cutFiles.length} on canvas`}</span></div>` : ''}
-      <div class="row"><button class="app-btn app-btn--primary grow" id="sendCanvas">${icon('canvas')}<span>${!connected ? 'Connect canvas' : c.canvasError ? 'Retry send' : 'Send to canvas'}</span><span class="kbd">S</span></button>
+      <div class="row">${S.info.key.set ? html`<button class="app-btn app-btn--primary grow" id="sendCanvas">${icon('canvas')}<span>${!connected ? 'Connect canvas' : c.canvasError ? 'Retry send' : 'Send to canvas'}</span><span class="kbd">S</span></button>`
+        : html`<button class="app-btn grow" disabled title="Needs a LetzAI API key">${icon('canvas')}<span>Send to canvas</span></button>`}
         <button class="app-btn" id="cutOnly" title="Cut the snippets without uploading">${icon('scissors')}<span>Cut only</span></button></div>
+      ${S.info.key.set ? '' : html`<div class="faint" style="font-size:12px;margin-top:6px">Sending needs your LetzAI API key. <a href="#/canvas">Add it in Canvas</a>.</div>`}
     </div>` : ''}
 
     <details class="insp-sec insp-fold" id="fileFold" ${fileOpen ? 'open' : ''}>
@@ -503,7 +505,8 @@ function dropMarker() {
 async function sendToCanvas() {
   const c = cur();
   if (!c || c.kind !== 'shot') return;
-  if (!(S.info.project.canvas.canvasId && S.info.key.set)) { window.kitGo('canvas'); return; }
+  if (!S.info.key.set) { toast('Sending to a canvas needs your LetzAI API key.', { link: { text: 'Add it', onClick: () => window.kitGo('canvas') } }); return; }
+  if (!S.info.project.canvas.canvasId) { window.kitGo('canvas'); return; }
   try { await post('/api/canvas/send', { keys: [c.key] }); toast(`Cutting and uploading ${c.scene}.${c.shot} take ${c.take}…`, { type: 'success' }); } catch (e) { toastError(e); }
 }
 
@@ -586,7 +589,7 @@ function bindPlayer() {
       { label: 'This take…', icon: 'pencil', onClick: () => openRenameTakes([c.key], { afterRename: after }) },
       { label: `Whole shot ${c.scene}.${c.shot} (${plural(shotTakes.length, 'take')})…`, icon: 'layers', onClick: () => openRenameTakes(shotTakes.map((x) => x.key), { title: `Rename shot ${c.scene}.${c.shot}`, afterRename: after }) },
       { label: `Whole scene ${c.scene} (${plural(sceneTakes.length, 'take')})…`, icon: 'board', onClick: () => openRenameTakes(sceneTakes.map((x) => x.key), { title: `Rename scene ${c.scene}`, afterRename: after }) },
-      { label: `Check this name with ${aiName()}…`, icon: 'bolt', onClick: () => openSlateReader({ keys: [c.key], force: true, title: `Check ${c.scene}.${c.shot} take ${c.take}` }) },
+      { label: aiReady() ? `Check this name with ${aiName()}…` : 'Check this name with AI (add a key in Settings)', icon: 'bolt', disabled: !aiReady(), onClick: () => openSlateReader({ keys: [c.key], force: true, title: `Check ${c.scene}.${c.shot} take ${c.take}` }) },
     ], { align: 'end' });
   });
   on(root, 'click', '#nextShot', () => stepShot(1));

@@ -115,6 +115,8 @@ The kit is developed and used on Windows. macOS and Linux are covered by automat
 
 ## First steps
 
+The first time you start the kit, a short setup asks for two optional keys: your **LetzAI API key** (to send takes to a canvas) and a **Claude, ChatGPT or Gemini key** (to let an AI read slates). Skip either one and that feature stays switched off until you add the key later, in *Settings* or *Canvas*. Everything else works without keys.
+
 1. **Choose your film folder.** The kit adds one small file to it, `letzai-kit.json`. Your footage is only renamed or cut when you ask for it.
 2. **Name your clips** in *Ingest*. A camera file like `A001_C047.mov` becomes `YourFilm-scene6-shot2-take1.mov`. Subfolders and your camera's `Proxy` folder are found automatically.
 3. **Write your shot list** (*Dashboard → ⋯ → Shot list…*), or start from what you have already shot. The Dashboard then shows what is missing.
@@ -186,12 +188,21 @@ Typing every slate by hand is the slow part. An AI can do the reading while you 
 
 1. **Add a key.** In *Settings → AI slate reading*, choose the AI and paste your key, or start a reading and the dialog asks for it. Get a key from the [Anthropic Console](https://console.anthropic.com/settings/keys), the [OpenAI dashboard](https://platform.openai.com/api-keys) or [Google AI Studio](https://aistudio.google.com/apikey). The key is tested when you save it and stays on your computer.
 2. **Choose the clips.** In *Ingest*, press *Name several…* and switch to *Claude reads the slates* (the button names the AI you chose), or use *Read slate with Claude* on a single clip. To check a take that already has a name: *Review → Rename ▾ → Check this name with Claude*.
-3. **Confirm.** Before anything is sent, you see how many clips will be read and roughly how big the request is. You can pick the model and must agree that frames are sent to that company. About six frames from the start of each clip are sent (six more if no slate is found). File names are not sent.
+3. **Confirm.** Before anything is sent, you see how many clips will be read and roughly what it will cost. You can pick the model and must agree that frames are sent to that company. About six frames from the start of each clip are sent (six more if no slate is found). File names are not sent.
 4. **Check the results.** Each row shows the frame that was read (click to enlarge), what the slate says, the suggested scene, shot and take (you can edit them), and how sure the AI is. Rows are flagged when the take already exists, two clips were read as the same take, the scene isn't in your shot list, the numbers don't fit the recording order, or the AI isn't sure. Tick the ones you want and press **Rename**. One undo reverses it.
 
 ![Check, correct and apply the readings](docs/screenshots/claude-slates.png)
 
-When a slate can't be read, the AI says so instead of guessing, and the clip is listed for you to check. Results are saved, so a clip is only read again when you ask for it, and you don't pay twice. The AI company's usage page shows what each reading cost.
+When a slate can't be read, the AI says so instead of guessing, and the clip is listed for you to check. Results are saved, so a clip is only read again when you ask for it, and you don't pay twice.
+
+### What it costs
+
+You pay the AI company directly, for what you use. A rough guide per clip with the recommended models: Gemini 3.8 Flash about $0.007, GPT-6.1 Terra about $0.01, Claude Sonnet 5.5 about $0.016. That is roughly $1.50 to $3 for a shoot day of 200 clips. The cheapest models cost a tenth of that, the most careful ones about twice as much.
+
+- **Before each run** the kit shows the estimated price, and *Settings → AI slate reading* shows what you have spent this month.
+- **Monthly budget.** Set one in *Settings* (or in the setup). When it is used up, reading stops; clips read until then keep their results.
+- **Large runs** above an amount you choose ($5 by default) ask for a second confirmation.
+- These amounts are estimates based on list prices. For a hard limit, also set a spending limit in your Anthropic, OpenAI or Google account; the kit links to it.
 
 ## The shot list
 
@@ -295,6 +306,8 @@ API keys can also come from environment variables: `LETZAI_API_KEY`, `ANTHROPIC_
 | **A clip says "Preparing a playable copy"** | Your browser can't play that camera file directly. A small copy is being made, which takes 10 to 60 seconds. See [4K and HEVC](#playing-4k-and-hevc-clips). |
 | **A rename says a file is in use** | Dropbox, OneDrive or another program is reading it. Nothing was changed. Wait until syncing has finished and try again. |
 | **The AI key is not accepted, or there is no credit** | Check the key in *Settings → AI slate reading*. Most AI companies need some prepaid credit on the account. |
+| **"Monthly budget used up"** | Raise the budget in *Settings → AI slate reading*, or wait until next month. |
+| **A button is greyed out** | It needs a key you haven't added yet: the LetzAI key for anything with the canvas, an AI key for slate reading. *Settings → Setup check → Setup assistant…* adds both. |
 | **An upload failed** | Open *Canvas*: the take shows the reason, and *Retry* sends what is missing. "Scene N has no page" means you need to add a page with that name in LetzAI. |
 | **It opens in a browser tab, not a window** | That's fine, it works the same. The kit uses your normal browser when it can't find Chrome, Edge or Brave. |
 | **Port already in use** | `npm start -- --port 5000` |

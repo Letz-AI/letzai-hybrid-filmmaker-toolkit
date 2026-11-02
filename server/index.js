@@ -164,6 +164,10 @@ function createServer({ token, port, app: injected }) {
       if (typeof body.key === 'string') await cfg.setVisionKey(pid, body.key);
       if (body.model != null) { if (!vision.PROVIDERS[pid].models.some((m) => m.id === body.model)) throw httpError(400, 'Unknown model.'); v.models[pid] = body.model; }
       if (body.consent != null) v.consent[pid] = !!body.consent;
+      if (body.budget) {
+        const amount = (x) => { if (x === null || x === '') return null; const n = Number(x); if (!Number.isFinite(n) || n < 0 || n > 100000) throw httpError(400, 'A budget is an amount in US dollars, like 10.'); return Math.round(n * 100) / 100; };
+        for (const k of ['monthly', 'confirmAbove']) if (k in body.budget) v.budget[k] = amount(body.budget[k]);
+      }
       await cfg.setVisionConfig(v);
       return vision.info();
     },
@@ -183,12 +187,17 @@ function createServer({ token, port, app: injected }) {
       if (!consent) throw httpError(400, `Confirm first that frames from your clips may be sent to ${who.company}.`, { code: 'no-consent' });
       const keys = (body.keys || []).filter((k) => p.byKey.has(k));
       if (!keys.length) throw httpError(400, 'Choose at least one clip.');
+      const est = slate.estimate(p, keys, { force: !!body.force });
+      if (est.budget.reached) throw slate.budgetError(est.budget, 0);
+      // a big run is confirmed in the browser first; this keeps a script or an old window from skipping that
+      if (est.budget.confirmAbove != null && est.usd > est.budget.confirmAbove && !body.confirmed) throw httpError(409, `This run costs about $${est.usd.toFixed(2)}. Confirm it first.`, { code: 'confirm-cost', usd: est.usd });
       const job = app.jobs.add({ lane: 'vision', title: `Reading slates · ${keys.length === 1 ? p.byKey.get(keys[0]).name : `${keys.length} clips`}`, detail: `${who.label} · ${model}`, run: (ctx) => slate.readMany(p, keys, { provider, model, force: !!body.force, signal: ctx.signal, progress: ctx.progress }) });
       return { job: job.id };
     },
     'POST /api/slate/clear': async ({ body }) => ({ cleared: slate.clear(app.requireProject(), body.keys || []) }),
 
     'PUT /api/key': async ({ body }) => { await cfg.setKey(body.key); return app.info().key; },
+    'PUT /api/setup': async ({ body }) => { await cfg.setSetupDone(body.done !== false); return cfg.setupState(); },
 
     'POST /api/jobs/cancel': async ({ body }) => ({ ok: app.jobs.cancel(body.id) }),
     'POST /api/jobs/clear': async () => { app.jobs.clearFinished(); return { ok: true }; },

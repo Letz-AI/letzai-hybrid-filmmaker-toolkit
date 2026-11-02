@@ -93,20 +93,56 @@ async function setVisionKey(provider, key) {
 }
 
 /**
- * Per-user choices for reading slates: the provider, a model per provider, and consent per provider (the person
- * agreeing that video frames are sent to that company). Older configs had one Claude model and one consent flag.
+ * Per-user choices for reading slates: the provider, a model per provider, consent per provider (the person
+ * agreeing that video frames are sent to that company) and a budget. Older configs had one Claude model and one
+ * consent flag. Budget: `monthly` stops readings once this month's estimated spend reaches it (null: no limit);
+ * `confirmAbove` asks again before a single run estimated above it (null: never ask).
  */
+const DEFAULT_BUDGET = { monthly: null, confirmAbove: 5 };
 function visionConfig() {
   const v = loadConfig().vision || {};
   const models = { ...(typeof v.model === 'string' ? { anthropic: v.model } : {}), ...(v.models || {}) };
   const consent = v.consent && typeof v.consent === 'object' ? { ...v.consent } : { anthropic: !!v.consent };
-  return { provider: v.provider || 'anthropic', models, consent };
+  return { provider: v.provider || 'anthropic', models, consent, budget: { ...DEFAULT_BUDGET, ...(v.budget || {}) } };
 }
 
 async function setVisionConfig(next) {
   const c = loadConfig();
-  const { provider, models, consent } = { ...visionConfig(), ...next };
-  c.vision = { provider, models, consent };
+  const { provider, models, consent, budget } = { ...visionConfig(), ...next };
+  c.vision = { provider, models, consent, budget };
+  await saveConfig(c);
+}
+
+/**
+ * What slate reading has cost this calendar month, estimated from the token counts the APIs report. Kept in its own
+ * small file and written synchronously, so three readings finishing at once cannot overwrite each other's amount.
+ */
+const spendFile = () => path.join(configDir(), 'spend.json');
+const monthNow = () => new Date().toISOString().slice(0, 7);
+function visionSpend() {
+  const s = readJson(spendFile(), {});
+  return s.month === monthNow() ? { month: s.month, usd: s.usd || 0, byProvider: s.byProvider || {} } : { month: monthNow(), usd: 0, byProvider: {} };
+}
+function addVisionSpend(provider, usd) {
+  if (!(usd > 0)) return visionSpend();
+  const s = visionSpend();
+  s.usd += usd;
+  s.byProvider[provider] = (s.byProvider[provider] || 0) + usd;
+  fs.mkdirSync(configDir(), { recursive: true });
+  const tmp = `${spendFile()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(s));
+  fs.renameSync(tmp, spendFile());
+  return s;
+}
+
+/** First-run setup: done once finished or skipped. People who used the kit before it existed never see it. */
+function setupState() {
+  const c = loadConfig();
+  return { done: !!c.setupDone || c.recent.length > 0 || !!getKey() };
+}
+async function setSetupDone(done = true) {
+  const c = loadConfig();
+  c.setupDone = !!done;
   await saveConfig(c);
 }
 
@@ -122,4 +158,4 @@ async function forgetProject(root) {
   await saveConfig(cfg);
 }
 
-module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, getVisionKey, visionKeySource, setVisionKey, visionConfig, setVisionConfig, rememberProject, forgetProject, APP_DIR_NAME };
+module.exports = { configDir, cacheDir, loadConfig, saveConfig, getKey, keySource, setKey, getVisionKey, visionKeySource, setVisionKey, visionConfig, setVisionConfig, visionSpend, addVisionSpend, setupState, setSetupDone, rememberProject, forgetProject, APP_DIR_NAME };

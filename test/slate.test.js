@@ -89,6 +89,11 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   const launch = await new Promise((resolve) => http.get({ host: '127.0.0.1', port, path: `/?k=${TOKEN}`, headers: { Host: `127.0.0.1:${port}` } }, (res) => { res.resume(); resolve(res.headers['set-cookie'][0].split(';')[0]); }));
   cookie = launch;
 
+  // a first launch offers the setup assistant; finishing or skipping it is remembered
+  assert.equal((await req('GET', '/api/info')).json.setup.done, false);
+  assert.equal((await req('PUT', '/api/setup', { body: { done: true } })).json.done, true);
+  assert.equal((await req('GET', '/api/info')).json.setup.done, true);
+
   assert.equal((await req('POST', '/api/project/create', { body: { root: film, name: 'T', prefix: 'Film' } })).status, 200);
   let clips;
   await until(async () => { clips = await library(); return clips.every((c) => c.probe); }, 'every clip to be probed');
@@ -118,12 +123,15 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   assert.equal(noConsent.json.code, 'no-consent');
   await req('PUT', '/api/vision', { body: { consent: true, model: 'claude-haiku-5-5' } });
 
-  // estimate counts clips and frames
+  // estimate counts clips and frames, and what they cost: Haiku at $0.10 / $0.50 per million tokens,
+  // 3 clips x (6 frames x 800 + 450 prompt) in, 3 x 600 out
   const est = (await req('POST', '/api/slate/estimate', { body: { keys: raws.map((c) => c.key) } })).json;
   assert.equal(est.clips, 3);
   assert.equal(est.frames, 18);
-  assert.ok(est.inputTokens > 10000);
+  assert.ok(Math.abs(est.usd - 0.002475) < 1e-9, `estimate ${est.usd}`);
+  assert.ok(est.usdMax > est.usd, 'a second look further in can cost more');
   assert.equal(est.model, 'claude-haiku-5-5');
+  assert.deepEqual([est.budget.spent, est.budget.monthly, est.budget.confirmAbove], [0, null, 5]);
 
   // read one clip: request shape and result
   fake.state.requests.length = 0;
@@ -148,6 +156,9 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   assert.deepEqual([r0.slate.scene, r0.slate.shot, r0.slate.take, r0.slate.status], ['6', '2A', 2, 'new']);
   assert.deepEqual(r0.slate.flags, []);
   assert.ok(r0.slate.tokens.in >= 5000);
+  // the cost of what the API reported (5000 in, 60 out) is kept with the reading and added to this month's spending
+  assert.ok(Math.abs(r0.slate.usd - 0.00053) < 1e-9, `cost ${r0.slate.usd}`);
+  assert.ok(Math.abs((await req('GET', '/api/vision')).json.budget.spent - 0.00053) < 1e-9);
 
   // already-read clips are skipped (no second charge) unless forced
   fake.state.requests.length = 0;
@@ -225,6 +236,34 @@ test('reading slates: key, consent, request shape, results, flags, retries, fail
   assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key], force: true } })).json.job)).state, 'done');
   assert.equal((await library()).find((c) => c.key === raws[2].key).slate.take, 9);
   fake.state.answerAsText = false;
+
+  // a run above the "ask before" amount needs a confirmation the browser asks for
+  await req('PUT', '/api/vision', { body: { budget: { confirmAbove: 0 } } });
+  const ask = await req('POST', '/api/slate/read', { body: { keys: [raws[2].key], force: true } });
+  assert.equal(ask.status, 409);
+  assert.equal(ask.json.code, 'confirm-cost');
+  fake.state.answers.push(reading({ take: 4 }));
+  assert.equal((await waitJob((await req('POST', '/api/slate/read', { body: { keys: [raws[2].key], force: true, confirmed: true } })).json.job)).state, 'done');
+  await req('PUT', '/api/vision', { body: { budget: { confirmAbove: null } } });
+  assert.equal((await req('PUT', '/api/vision', { body: { budget: { monthly: 'lots' } } })).status, 400);
+
+  // the monthly budget: a run stops once it is used up (what was read is kept); then no new run starts
+  await req('PUT', '/api/vision', { body: { model: 'claude-opus-5-5' } });   // about $0.021 per clip
+  const spent = (await req('GET', '/api/vision')).json.budget.spent;
+  await req('PUT', '/api/vision', { body: { budget: { monthly: Math.ceil((spent + 0.005) * 100) / 100 } } });
+  const all4 = (await library()).map((c) => c.key);
+  assert.equal(all4.length, 4);
+  for (let i = 0; i < 4; i++) fake.state.answers.push(reading({ take: 20 + i }));
+  const capped = await waitJob((await req('POST', '/api/slate/read', { body: { keys: all4, force: true } })).json.job);
+  assert.equal(capped.state, 'error');
+  assert.match(capped.error, /monthly budget .* is used up, so 1 clip was not read/);
+  const after = (await req('GET', '/api/vision')).json.budget;
+  assert.equal(after.reached, true);
+  const refused = await req('POST', '/api/slate/read', { body: { keys: [raws[1].key], force: true } });
+  assert.equal(refused.status, 402);
+  assert.equal(refused.json.code, 'budget');
+  await req('PUT', '/api/vision', { body: { model: 'claude-haiku-5-5', budget: { monthly: null } } });
+  fake.state.answers.length = 0;
 
   // clearing readings
   assert.equal((await req('POST', '/api/slate/clear', { body: { keys: [raws[1].key, raws[2].key] } })).json.cleared, 2);

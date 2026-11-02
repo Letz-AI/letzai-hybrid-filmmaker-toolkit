@@ -9,28 +9,31 @@ const PROVIDERS = {
   anthropic: {
     id: 'anthropic', label: 'Claude', company: 'Anthropic', host: 'api.anthropic.com',
     keyUrl: 'https://console.anthropic.com/settings/keys', keyPage: 'Anthropic Console', keyHint: 'sk-ant-…', env: 'ANTHROPIC_API_KEY',
+    limitsUrl: 'https://console.anthropic.com/settings/limits', imageTokens: 800,
     models: [
-      { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'Recommended: reads handwriting well at a fair price' },
-      { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'Fastest and cheapest; try it on clean, printed slates' },
-      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', note: 'Most careful, for messy or tilted slates; costs the most' },
+      { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'Recommended: reads handwriting well at a fair price', prices: [{ in: 2, out: 10 }] },
+      { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'Fastest and cheapest; try it on clean, printed slates', prices: [{ in: 0.1, out: 0.5 }] },
+      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', note: 'Most careful, for messy or tilted slates; costs the most', prices: [{ in: 4, out: 20 }] },
     ],
   },
   openai: {
     id: 'openai', label: 'ChatGPT', company: 'OpenAI', host: 'api.openai.com',
     keyUrl: 'https://platform.openai.com/api-keys', keyPage: 'OpenAI dashboard', keyHint: 'sk-…', env: 'OPENAI_API_KEY',
+    limitsUrl: 'https://platform.openai.com/settings/organization/limits', imageTokens: 1100,
     models: [
-      { id: 'gpt-6.1-terra', label: 'GPT-6.1 Terra', note: 'Recommended: made for reading images, at a fair price' },
-      { id: 'gpt-6-luna', label: 'GPT-6 Luna', note: 'Cheapest; try it on clean, printed slates' },
-      { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', note: 'More careful, for messy or tilted slates; costs more' },
+      { id: 'gpt-6.1-terra', label: 'GPT-6.1 Terra', note: 'Recommended: made for reading images, at a fair price', prices: [{ in: 1, out: 5 }] },
+      { id: 'gpt-6-luna', label: 'GPT-6 Luna', note: 'Cheapest; try it on clean, printed slates', prices: [{ in: 0.1, out: 0.5 }] },
+      { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', note: 'More careful, for messy or tilted slates; costs more', prices: [{ in: 2, out: 10 }] },
     ],
   },
   google: {
     id: 'google', label: 'Gemini', company: 'Google', host: 'generativelanguage.googleapis.com',
     keyUrl: 'https://aistudio.google.com/apikey', keyPage: 'Google AI Studio', keyHint: 'AIza…', env: 'GEMINI_API_KEY',
+    limitsUrl: 'https://console.cloud.google.com/billing/budgets', imageTokens: 1100,
     models: [
-      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Recommended: fast and reads handwriting well' },
-      { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Cheapest; try it on clean, printed slates' },
-      { id: 'gemini-4-argon', label: 'Gemini 4 Argon', note: 'Most careful, for messy or tilted slates; costs the most' },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Recommended: fast and reads handwriting well', prices: [{ in: 0.75, out: 3.75 }, { from: '2027-01-01', in: 1.5, out: 7.5 }] },
+      { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Cheapest; try it on clean, printed slates', prices: [{ in: 0.3, out: 2.5 }] },
+      { id: 'gemini-4-argon', label: 'Gemini 4 Argon', note: 'Most careful, for messy or tilted slates; costs the most', prices: [{ in: 2, out: 10 }, { from: '2026-12-01', in: 4, out: 20 }] },
     ],
   },
 };
@@ -43,6 +46,38 @@ const BASE = {
   google: () => process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com',
 };
 const baseUrl = (p) => String(BASE[p]()).replace(/\/+$/, '');
+
+// Prices are list prices in USD per million tokens, as published when this version of the kit was made; a later entry
+// with `from` takes over on that date. Thinking tokens are billed as output. Prices only feed estimates: the
+// provider's own usage page is the real bill.
+const OUTPUT_TOKENS = 600;   // a typical answer, thinking included
+const PROMPT_TOKENS = 450;
+
+/** The price of a model today (or on `date`). */
+function priceOf(pid, model, date = new Date().toISOString().slice(0, 10)) {
+  const m = provider(pid).models.find((x) => x.id === model);
+  if (!m) return null;
+  return m.prices.filter((x) => !x.from || x.from <= date).pop();
+}
+
+/** USD for the tokens a request used. */
+function costOf(pid, model, tokens) {
+  const p = priceOf(pid, model);
+  return p ? ((tokens.in || 0) * p.in + (tokens.out || 0) * p.out) / 1e6 : 0;
+}
+
+/** What reading `clips` clips with `frames` frames each should cost, roughly. */
+function estimateCost(pid, model, clips, frames) {
+  return costOf(pid, model, { in: clips * (frames * provider(pid).imageTokens + PROMPT_TOKENS), out: clips * OUTPUT_TOKENS });
+}
+
+/** This month's estimated spend against the budget. `left` is null when there is no monthly budget. */
+function budgetState() {
+  const { budget } = cfg.visionConfig();
+  const spend = cfg.visionSpend();
+  const left = budget.monthly == null ? null : Math.max(0, budget.monthly - spend.usd);
+  return { ...budget, spent: spend.usd, month: spend.month, left, reached: left != null && left <= 0 };
+}
 
 /** The provider, model and consent in use, with defaults filled in. */
 function settings() {
@@ -98,7 +133,7 @@ function explainApi(pid, status, body) {
 }
 
 /** Errors that will repeat for every remaining clip: stop instead of retrying them 40 times. */
-const isFatal = (e) => e && (e.status === 401 || e.status === 403 || e.status === 404 || e.code === 'no-credit' || e.code === 'no-vision-key');
+const isFatal = (e) => e && (e.status === 401 || e.status === 403 || e.status === 404 || e.code === 'no-credit' || e.code === 'no-vision-key' || e.code === 'budget');
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);
@@ -216,7 +251,10 @@ async function readSlate(frames, { provider: pid, model, key, signal } = {}) {
   if (!frames.length) throw httpError(400, 'No frames to read.');
   const s = settings();
   const p = provider(pid || s.provider);
-  const { answer: r, tokens } = await ASK[p.id](frames, model || s.model, keyFor(p.id, key), signal);
+  const m = model || s.model;
+  const { answer: r, tokens } = await ASK[p.id](frames, m, keyFor(p.id, key), signal);
+  const usd = costOf(p.id, m, tokens);
+  cfg.addVisionSpend(p.id, usd);   // counted even when the answer is unusable: it was paid for
   if (!r) throw httpError(502, `${p.label} did not answer in the expected form. Try again.`);
   const take = Number.isInteger(r.take) && r.take >= 1 && r.take <= 999 ? r.take : (/^\d{1,3}$/.test(String(r.take)) && +r.take >= 1 ? +r.take : null);
   const scene = fieldOk(r.scene);
@@ -230,7 +268,7 @@ async function readSlate(frames, { provider: pid, model, key, signal } = {}) {
     frame: Math.max(1, Math.min(frames.length, parseInt(r.best_frame, 10) || 1)),
     evidence: String(r.evidence || '').slice(0, 200),
     other: String(r.other || '').slice(0, 200),
-    tokens,
+    tokens, usd,
   };
 }
 
@@ -248,8 +286,9 @@ async function verifyKey({ provider: pid, key, model } = {}) {
 function info() {
   const s = settings();
   const p = provider(s.provider);
-  const pub = (x) => ({ id: x.id, label: x.label, company: x.company, host: x.host, keyUrl: x.keyUrl, keyPage: x.keyPage, keyHint: x.keyHint, env: x.env, models: x.models, key: { set: !!cfg.getVisionKey(x.id), source: cfg.visionKeySource(x.id) } });
-  return { ...s, label: p.label, company: p.company, key: pub(p).key, models: p.models, providers: PROVIDER_IDS.map((id) => pub(PROVIDERS[id])) };
+  const withPrice = (x) => x.models.map((m) => ({ id: m.id, label: m.label, note: m.note, price: priceOf(x.id, m.id) }));
+  const pub = (x) => ({ id: x.id, label: x.label, company: x.company, host: x.host, keyUrl: x.keyUrl, keyPage: x.keyPage, keyHint: x.keyHint, env: x.env, limitsUrl: x.limitsUrl, models: withPrice(x), key: { set: !!cfg.getVisionKey(x.id), source: cfg.visionKeySource(x.id) } });
+  return { ...s, label: p.label, company: p.company, key: pub(p).key, models: withPrice(p), providers: PROVIDER_IDS.map((id) => pub(PROVIDERS[id])), budget: budgetState() };
 }
 
-module.exports = { PROVIDERS, PROVIDER_IDS, TOOL, settings, info, answerOf, answerInText, readSlate, verifyKey, explainApi, isFatal, fieldOk };
+module.exports = { PROVIDERS, PROVIDER_IDS, TOOL, settings, info, priceOf, costOf, estimateCost, budgetState, answerOf, answerInText, readSlate, verifyKey, explainApi, isFatal, fieldOk };

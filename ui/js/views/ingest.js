@@ -4,7 +4,7 @@ import { post, patch } from '../api.js';
 import { S, clips, allClips, clip, loadLibrary, hasManyFolders, folderLabel } from '../store.js';
 import { folderButton, wireFolderControls } from '../folderpick.js';
 import { toast, toastError, openPopup, field } from '../ui.js';
-import { openSlateReader, aiName } from '../slate.js';
+import { openSlateReader, aiName, aiReady } from '../slate.js';
 
 const setSkip = (k, v) => patch('/api/clip', { key: k, patch: { skip: v } });
 
@@ -28,6 +28,7 @@ function openBulkName() {
   const unnamed = queue();
   const named = clips().filter((c) => c.kind === 'shot' && !c.skip);
   if (!unnamed.length && !named.length) { toast('No clips here.'); return; }
+  if (!unnamed.length && !aiReady()) { toast('Every clip here has a name. To check names against the slates, add an AI key in Settings.', { link: { text: 'Settings', onClick: () => window.kitGo('settings') } }); return; }
   let src = unnamed.length ? 'type' : 'claude';  // 'type' | 'claude'
   let withNamed = !unnamed.length;               // AI only: also re-check named takes
   let mode = 'takes';                            // numbering when typing: 'takes' | 'shots'
@@ -37,7 +38,8 @@ function openBulkName() {
   const p = openPopup({
     title: 'Name several clips', width: 780,
     body: html`<div style="display:grid;gap:14px">
-      <div class="app-segmented" role="radiogroup" aria-label="How to name"><button role="radio" data-src="type" ${unnamed.length ? '' : 'disabled'}>Type the slate</button><button role="radio" data-src="claude">${icon('bolt', 14)}${aiName()} reads the slates</button></div>
+      <div class="app-segmented" role="radiogroup" aria-label="How to name"><button role="radio" data-src="type" ${unnamed.length ? '' : 'disabled'}>Type the slate</button><button role="radio" data-src="claude" ${aiReady() ? '' : 'disabled title="Add an AI key in Settings to use this"'}>${icon('bolt', 14)}${aiReady() ? `${aiName()} reads the slates` : 'AI reads the slates'}</button></div>
+      ${aiReady() ? '' : html`<div class="faint" style="font-size:12px;margin-top:-6px">To let an AI read the slates, add a Claude, ChatGPT or Gemini key in <a href="#/settings" data-close-go>Settings</a>.</div>`}
       <div class="row" id="bType" style="gap:12px;align-items:flex-start">${field('Scene', html`<input class="app-input" id="bScene" value="${pred.scene}" style="width:90px" maxlength="6" spellcheck="false">`)}${field('Shot', html`<input class="app-input" id="bShot" value="${pred.shot}" style="width:90px" maxlength="6" spellcheck="false">`)}${field('First take', html`<input class="app-input" id="bTake" type="number" min="1" value="${pred.take}" style="width:100px">`)}
         <div class="grow"></div>
         <div class="app-field"><div class="label">Numbering</div><div class="app-segmented" role="radiogroup" aria-label="How to number"><button role="radio" aria-checked="true" data-bm="takes">Takes of one shot</button><button role="radio" aria-checked="false" data-bm="shots">One shot each</button></div></div></div>
@@ -116,6 +118,7 @@ function openBulkName() {
     if (e.target.id === 'bNamed') { withNamed = e.target.checked; named.forEach((c) => (withNamed ? on_.add(c.key) : on_.delete(c.key))); draw(); }
   });
   on(p.el, 'click', '[data-src]', (e, bt) => { if (bt.disabled) return; src = bt.dataset.src; draw(); });
+  on(p.el, 'click', '[data-close-go]', () => p.close());
   on(p.el, 'click', '[data-bm]', (e, bt) => { if (bt.disabled) return; mode = bt.dataset.bm; p.el.querySelectorAll('[data-bm]').forEach((x) => x.setAttribute('aria-checked', String(x === bt))); draw(); });
   p.el.querySelector('[data-no]').addEventListener('click', p.close);
   p.el.querySelector('#bGo').addEventListener('click', async () => {
@@ -193,7 +196,7 @@ function renderQueue() {
   const sk = skipped();
   mount($('#igQueue', root), html`
     <div class="nav-head"><div class="row"><span class="grow rail-label" style="padding:0">Unnamed clips</span><span class="faint tnum">${q.length}</span></div>${hasManyFolders() || S.filters.folder ? html`<div style="margin-top:8px">${folderButton()}</div>` : ''}
-      ${q.length > 1 || clips().some((c) => c.kind === 'shot') ? html`<button class="app-btn app-btn--primary" id="bulkName" style="width:100%;margin-top:10px" title="Type the slate once for many clips, or let the AI read them">${icon('slate')}<span>Name several…</span></button>` : ''}</div>
+      ${q.length > 1 || (aiReady() && clips().some((c) => c.kind === 'shot')) ? html`<button class="app-btn app-btn--primary" id="bulkName" style="width:100%;margin-top:10px" title="Type the slate once for many clips, or let the AI read them">${icon('slate')}<span>Name several…</span></button>` : ''}</div>
     <div class="nav-tree ig-list">
       ${q.map((c) => html`<div class="ig-row"><button class="ig-item ${c.key === key ? 'active' : ''}" data-q="${c.key}">
         <span class="mini-poster"><img loading="lazy" alt="" src="${frameUrl(c, clamp(c.duration ? Math.min(1, c.duration / 2) : 1, 0, 2), 200)}" onerror="this.style.visibility='hidden'"></span>
@@ -280,9 +283,11 @@ function renderClaudeBox() {
   if (!box || !c) return;
   const s = c.slate;
   const flags = s && s.flags && s.flags.length ? html`<div style="font-size:12px;color:var(--color-warning);margin-top:2px">${s.flags.map((f) => ({ low: 'Not sure', partial: 'Only part of the slate was readable', taken: 'That take already exists', twice: 'Another clip was read the same', 'not-in-plan': 'Scene is not in the shot list', order: 'Out of recording order' }[f] || f)).join(' · ')}</div>` : '';
-  mount(box, !s ? html`<button class="app-btn app-btn--sm" id="igClaude1" title="Let ${aiName()} read this slate">${icon('bolt', 14)}<span>Read slate with ${aiName()}</span></button>`
-    : s.status === 'unreadable' ? html`<div class="claude-box"><div class="grow"><b>No readable slate found</b>${s.evidence ? html`<div class="faint" style="font-size:12px">${s.evidence}</div>` : ''}</div><button class="app-btn app-btn--sm" id="igClaude1">Read again</button></div>`
-      : html`<div class="claude-box"><div class="grow"><div><span class="faint">Read as</span> <b class="tnum">${s.scene} · ${s.shot} · take ${s.take}</b> <span class="app-chip xs ${s.confidence >= 0.85 && !(s.flags || []).length ? 'app-chip--success' : 'app-chip--warning'}">${Math.round(s.confidence * 100)}%</span></div><div class="faint" style="font-size:12px">${s.evidence ? `Slate says “${s.evidence}”` : ''}${s.frameT != null ? ` · frame at ${s.frameT.toFixed(1)} s` : ''}</div>${flags}</div><button class="app-btn app-btn--sm app-btn--outline" data-fill="${s.scene}|${s.shot}|${s.take}" id="igUseClaude">Use this</button><button class="app-icon-btn app-icon-btn--sm" id="igClaude1" title="Read again">${icon('regenerate', 14)}</button></div>`);
+  const ready = aiReady();
+  mount(box, !s ? (ready ? html`<button class="app-btn app-btn--sm" id="igClaude1" title="Let ${aiName()} read this slate">${icon('bolt', 14)}<span>Read slate with ${aiName()}</span></button>`
+      : html`<div class="row" style="gap:8px"><button class="app-btn app-btn--sm" disabled title="Needs an AI key">${icon('bolt', 14)}<span>Read slate with AI</span></button><a href="#/settings" class="faint" style="font-size:12px">Add an AI key</a></div>`)
+    : s.status === 'unreadable' ? html`<div class="claude-box"><div class="grow"><b>No readable slate found</b>${s.evidence ? html`<div class="faint" style="font-size:12px">${s.evidence}</div>` : ''}</div><button class="app-btn app-btn--sm" id="igClaude1" ${ready ? '' : 'disabled title="Needs an AI key"'}>Read again</button></div>`
+      : html`<div class="claude-box"><div class="grow"><div><span class="faint">Read as</span> <b class="tnum">${s.scene} · ${s.shot} · take ${s.take}</b> <span class="app-chip xs ${s.confidence >= 0.85 && !(s.flags || []).length ? 'app-chip--success' : 'app-chip--warning'}">${Math.round(s.confidence * 100)}%</span></div><div class="faint" style="font-size:12px">${s.evidence ? `Slate says “${s.evidence}”` : ''}${s.frameT != null ? ` · frame at ${s.frameT.toFixed(1)} s` : ''}</div>${flags}</div><button class="app-btn app-btn--sm app-btn--outline" data-fill="${s.scene}|${s.shot}|${s.take}" id="igUseClaude">Use this</button><button class="app-icon-btn app-icon-btn--sm" id="igClaude1" title="${ready ? 'Read again' : 'Needs an AI key'}" ${ready ? '' : 'disabled'}>${icon('regenerate', 14)}</button></div>`);
 }
 
 const nextShotId = (s) => (/^\d+$/.test(s) ? String(+s + 1) : String((parseInt(s, 10) || 0) + 1));

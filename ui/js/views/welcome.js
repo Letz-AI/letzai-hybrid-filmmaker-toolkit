@@ -3,6 +3,7 @@ import { html, icon, mount, on, $, esc } from '../lib.js';
 import { get, post } from '../api.js';
 import { S } from '../store.js';
 import { toast, toastError, openPopup, field } from '../ui.js';
+import { openSetup } from '../setup.js';
 
 let root;
 let off = [];
@@ -39,7 +40,9 @@ function hero() {
         <div class="row">${icon(ffOk ? 'checkCircle' : 'alert')}<div class="grow"><b>ffmpeg</b><div class="muted">${ffOk ? html`Found, version ${S.info.ffmpeg.version}.` : html`Needed for thumbnails, review proxies and cuts.`}</div></div></div>
         ${ffOk ? '' : html`<div class="app-alert app-alert--warning" style="grid-column:1/-1"><div class="grow"><b>Install ffmpeg to continue</b>
             Windows: <code>winget install Gyan.FFmpeg</code> &nbsp;·&nbsp; macOS: <code>brew install ffmpeg</code> &nbsp;·&nbsp; Linux: <code>sudo apt install ffmpeg</code><br>Then restart the kit. You can also point <code>LETZAI_KIT_FFMPEG</code> at your ffmpeg folder.</div></div>`}
-        <div class="row">${icon(S.info.key.set ? 'checkCircle' : 'info')}<div class="grow"><b>LetzAI API key</b><div class="muted">${S.info.key.set ? 'Saved' : 'Optional. Add it later in Canvas.'}</div></div></div>
+        <div class="row">${icon(S.info.key.set ? 'checkCircle' : 'info')}<div class="grow"><b>LetzAI API key</b><div class="muted">${S.info.key.set ? 'Saved' : 'Optional. Needed to send takes to a LetzAI Canvas.'}</div></div></div>
+        <div class="row">${icon(S.info.vision && S.info.vision.keySet ? 'checkCircle' : 'info')}<div class="grow"><b>AI key for slate reading</b><div class="muted">${S.info.vision && S.info.vision.keySet ? `${S.info.vision.label}, saved` : 'Optional. Claude, ChatGPT or Gemini reads the slates for you.'}</div></div></div>
+        <div class="row" style="grid-column:1/-1"><button class="app-btn app-btn--sm" id="setupKeys">${icon('key', 14)}<span>${S.info.key.set && S.info.vision && S.info.vision.keySet ? 'Change keys…' : 'Add keys…'}</span></button></div>
       </div>
     </div>`;
 }
@@ -105,6 +108,7 @@ export default {
     mount(el, html`<div class="page default">${hero()}</div>`);
     const c = $('.page', el);
     on(c, 'click', '#choose', chooseFolder);
+    on(c, 'click', '#setupKeys', () => openSetup({ onDone: () => this.update() }));
     on(c, 'click', '#openPath', () => { const v = $('#pathInput', c).value.trim(); if (v) openOrCreate(v); });
     c.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'pathInput') { const v = e.target.value.trim(); if (v) openOrCreate(v); } });
     on(c, 'click', '[data-open]', (e, el2) => { if (e.target.closest('[data-forget]')) return; openOrCreate(el2.dataset.open); });

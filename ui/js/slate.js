@@ -3,7 +3,7 @@
 import { html, icon, mount, plural, fmtClock } from './lib.js';
 import { get, post, put } from './api.js';
 import { S, clip, loadLibrary, loadInfo, subscribeJobs } from './store.js';
-import { openPopup, toast, toastError, field } from './ui.js';
+import { openPopup, toast, toastError, field, confirmDialog } from './ui.js';
 
 /** The AI in use, by name ("Claude", "ChatGPT", "Gemini"), for buttons and hints. */
 export const aiName = () => (S.info && S.info.vision && S.info.vision.label) || 'AI';
@@ -11,6 +11,10 @@ export const aiName = () => (S.info && S.info.vision && S.info.vision.label) || 
 /** Claude / ChatGPT / Gemini, as a segmented control; buttons carry data-prov. */
 export const providerPicker = (v) => html`<div class="app-segmented" role="radiogroup" aria-label="AI" style="width:max-content">${v.providers.map((x) => html`<button role="radio" aria-checked="${x.id === v.provider}" data-prov="${x.id}" title="${x.company}">${x.label}</button>`)}</div>`;
 export const currentProvider = (v) => v.providers.find((x) => x.id === v.provider);
+/** Is there a key for the AI in use? Without one, the AI buttons are shown as unavailable. */
+export const aiReady = () => !!(S.info && S.info.vision && S.info.vision.keySet);
+/** An estimated amount of money: "$0.42", "less than $0.01". */
+export const money = (n) => (n > 0 && n < 0.01 ? 'less than $0.01' : `$${(n || 0).toFixed(2)}`);
 
 const FLAG_TEXT = {
   low: 'The AI is not sure',
@@ -85,14 +89,19 @@ export async function openSlateReader({ keys, title = '', force = false, view = 
     input.focus();
   }
 
-  // 2. what will be sent
+  // 2. what will be sent, and what it costs
   async function stepConfirm() {
     let est;
     try { est = await post('/api/slate/estimate', { keys, force: again }); } catch (e) { toastError(e); return; }
     const modelNote = (id) => (v.models.find((m) => m.id === id) || {}).note || '';
+    const b = est.budget;
+    const over = b.left != null && est.usd > b.left;
     mount(p.body, html`<div style="display:grid;gap:14px">
-      <div><b>${est.clips ? `${plural(est.clips, 'clip')} will be read` : 'Nothing new to read'}</b>
-        <div class="muted">${est.clips ? `About ${plural(est.frames, 'frame')} and ${Math.round(est.inputTokens / 1000)}k input tokens in all. Your ${v.company} usage page shows the exact cost.` : 'Every clip here was read already.'}</div></div>
+      <div><b>${est.clips ? `${plural(est.clips, 'clip')} will be read, for about ${money(est.usd)}` : 'Nothing new to read'}</b>
+        <div class="muted">${est.clips ? `Up to ${money(est.usdMax)} if many slates come late and need a second look. This is an estimate; your ${v.company} usage page shows the exact cost.` : 'Every clip here was read already.'}</div>
+        <div class="faint" style="font-size:12px;margin-top:4px">This month so far: about ${money(b.spent)}${b.monthly != null ? ` of your ${money(b.monthly)} budget` : ''}.</div></div>
+      ${b.reached ? html`<div class="app-alert app-alert--error">${icon('alert')}<div class="grow"><b>Monthly budget used up</b>Raise it in <a href="#/settings">Settings</a> to read more this month.</div></div>`
+        : over && est.clips ? html`<div class="app-alert app-alert--warning">${icon('warn')}<div class="grow"><b>This may go over your budget</b>${money(b.left)} is left this month. Reading stops when it is used up; what was read until then is kept.</div></div>` : ''}
       ${field('AI', providerPicker(v))}
       ${est.skipped || again ? html`<label class="app-switch"><input type="checkbox" id="slAgain" ${again ? 'checked' : ''}><span>Read clips again that were read before${est.skipped ? html`<br><span class="faint">${plural(est.skipped, 'clip')} already ${est.skipped === 1 ? 'has' : 'have'} a reading and would be skipped.</span>` : ''}</span></label>` : ''}
       ${field('Model', html`<select class="app-input" id="slModel">${v.models.map((m) => html`<option value="${m.id}" ${m.id === v.model ? 'selected' : ''}>${m.label}</option>`)}</select>`, html`<span id="slModelNote">${modelNote(v.model)}</span>`)}
@@ -101,20 +110,24 @@ export async function openSlateReader({ keys, title = '', force = false, view = 
     mount(p.foot, html`${hasReadings(keys) ? html`<button class="app-btn" id="slSee">Review earlier readings</button>` : ''}<span class="grow"></span><button class="app-btn" data-no>Cancel</button><button class="app-btn app-btn--primary" id="slGo">${est.clips ? `Read ${plural(est.clips, 'clip')}` : 'Nothing to read'}</button>`);
     const go = p.foot.querySelector('#slGo');
     const consent = p.body.querySelector('#slConsent');
-    const sync = () => { go.disabled = !est.clips || !consent.checked; };
+    const sync = () => { go.disabled = !est.clips || !consent.checked || b.reached; };
     sync();
     consent.addEventListener('change', sync);
-    p.body.querySelector('#slModel').addEventListener('change', (e) => { v.model = e.target.value; p.body.querySelector('#slModelNote').textContent = modelNote(v.model); });
+    // another model costs differently: save the choice and work the estimate out again
+    p.body.querySelector('#slModel').addEventListener('change', async (e) => { try { v = await put('/api/vision', { model: e.target.value }); stepConfirm(); } catch (err) { toastError(err); } });
     const ag = p.body.querySelector('#slAgain');
     if (ag) ag.addEventListener('change', () => { again = ag.checked; stepConfirm(); });
     p.foot.querySelector('[data-no]').addEventListener('click', p.close);
     const see = p.foot.querySelector('#slSee');
     if (see) see.addEventListener('click', () => stepResults());
     go.addEventListener('click', async () => {
+      // a big run gets a second, explicit yes
+      const big = b.confirmAbove != null && est.usd > b.confirmAbove;
+      if (big && !(await confirmDialog({ title: `Spend about ${money(est.usd)}?`, message: `Reading ${plural(est.clips, 'clip')} with ${(v.models.find((m) => m.id === v.model) || {}).label || v.model} costs about ${money(est.usd)} (up to ${money(est.usdMax)}), more than the ${money(b.confirmAbove)} you set for a single run. A cheaper model or fewer clips would cost less.`, confirmLabel: `Read ${plural(est.clips, 'clip')}` }))) return;
       go.disabled = true;
       try {
         await put('/api/vision', { consent: true, model: v.model });
-        const r = await post('/api/slate/read', { keys, force: again });
+        const r = await post('/api/slate/read', { keys, force: again, confirmed: big });
         stepRunning(r.job);
       } catch (e) {
         go.disabled = false;

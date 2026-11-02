@@ -41,6 +41,7 @@ class App extends EventEmitter {
       system: ff.describeSystem(),
       key: { set: !!cfg.getKey(), source: cfg.keySource() },
       vision: (() => { const v = vision.settings(); const p = vision.PROVIDERS[v.provider]; return { ...v, label: p.label, company: p.company, keySet: !!cfg.getVisionKey(v.provider) }; })(),
+      setup: cfg.setupState(),
       recent: cfg.loadConfig().recent.filter((r) => fs.existsSync(r.root)),
       project: this.project ? this.project.summary() : null,
     };

@@ -6,6 +6,7 @@ import { toast, toastError, openMenu, closeTopLayer, hasLayer, openPopup } from 
 import { openPalette } from './palette.js';
 import { openQueue } from './queue.js';
 import { openRenameAll } from './renameall.js';
+import { openSetup } from './setup.js';
 
 import welcome from './views/welcome.js';
 import board from './views/board.js';
@@ -237,6 +238,8 @@ window.addEventListener('hashchange', () => { route(); renderRail(); });
     connectEvents();
     route();
     renderChrome();
+    // first launch: offer the two optional keys before anything else
+    if (S.info.setup && !S.info.setup.done) openSetup();
   } catch (e) {
     mount($main, html`<div class="app-empty"><div class="app-empty-title">Can't reach the kit</div><div class="app-empty-body">${e.message}</div></div>`);
   }

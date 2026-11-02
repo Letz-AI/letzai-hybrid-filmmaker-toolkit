@@ -1,7 +1,8 @@
 // Settings: project, footage, playback, AI slate reading, appearance; naming details, setup check and data under Advanced.
 import { html, icon, mount, on, $, plural, debounce, fmtSize } from '../lib.js';
 import { get, post, put, patch } from '../api.js';
-import { providerPicker, currentProvider } from '../slate.js';
+import { providerPicker, currentProvider, money } from '../slate.js';
+import { openSetup } from '../setup.js';
 import { S, loadInfo, clips, allClips, folders } from '../store.js';
 import { toast, toastError, confirmDialog, field } from '../ui.js';
 import { openRenameAll } from '../renameall.js';
@@ -63,7 +64,14 @@ function draw() {
           ${visMsg ? html`<div class="app-alert app-alert--${visMsg.ok ? 'success' : 'error'}" style="margin-top:8px">${icon(visMsg.ok ? 'checkCircle' : 'alert')}<div class="grow">${visMsg.text}</div></div>` : ''}
         </div>
         ${field('Model', html`<select class="app-input" id="sVisModel">${vis.models.map((m) => html`<option value="${m.id}" title="${m.note}" ${m.id === vis.model ? 'selected' : ''}>${m.label}</option>`)}</select>`)}
-        <label class="app-switch" title="A few frames from the start of each clip you ask the AI to read. File names are not sent. You see the size of each run first."><input type="checkbox" id="sVisConsent" ${vis.consent ? 'checked' : ''}><span>Allow sending frames to ${vis.company}</span></label>` : html`<span class="row"><span class="spinner"></span> Loading…</span>`}
+        <label class="app-switch" title="A few frames from the start of each clip you ask the AI to read. File names are not sent. You see the size of each run first."><input type="checkbox" id="sVisConsent" ${vis.consent ? 'checked' : ''}><span>Allow sending frames to ${vis.company}</span></label>
+        <div class="app-field"><div class="label">Spending</div>
+          <div class="muted">This month: about ${money(vis.budget.spent)}${vis.budget.monthly != null ? ` of your ${money(vis.budget.monthly)} budget` : ''}. <span class="faint">Estimated from what the AI reports; your ${vis.company} account shows the exact amount.</span></div></div>
+        <div class="row wrap" style="gap:16px;align-items:flex-start">
+          ${field('Monthly budget (US$)', html`<input class="app-input" id="sBudget" type="number" min="0" step="1" inputmode="decimal" placeholder="No limit" value="${vis.budget.monthly ?? ''}" style="width:160px">`, 'Reading stops when it is used up.')}
+          ${field('Ask before a run over (US$)', html`<input class="app-input" id="sConfirm" type="number" min="0" step="1" inputmode="decimal" placeholder="Never ask" value="${vis.budget.confirmAbove ?? ''}" style="width:160px">`, 'Large runs need a second yes.')}
+        </div>
+        <div class="app-hint">The kit’s budget is an estimate. For a hard limit, also set one in your <a href="${currentProvider(vis).limitsUrl}" target="_blank" rel="noopener">${vis.company} account</a>.</div>` : html`<span class="row"><span class="spinner"></span> Loading…</span>`}
     </div>
 
     <div class="section-label">Appearance</div>
@@ -85,7 +93,7 @@ function draw() {
       ${check(S.hevc, 'HEVC playback', S.hevc ? 'Camera files play directly.' : html`Not in this browser, so playable copies are made. <span class="faint">On Windows the “HEVC Video Extensions” from the Microsoft Store fix this.</span>`)}
       ${check(S.info.vision && S.info.vision.keySet, `${(S.info.vision && S.info.vision.company) || 'AI'} API key`, S.info.vision && S.info.vision.keySet ? 'Saved' : 'Optional')}
       ${check(S.info.key.set, 'LetzAI API key', S.info.key.set ? 'Saved' : html`Optional. Add it in <a href="#/canvas">Canvas</a>.`)}
-      <div class="row" style="margin-top:6px"><button class="app-btn app-btn--sm" id="prepProxies">${icon('layers', 14)}<span>Prepare playable copies for ${needProxy ? plural(needProxy, 'clip') : 'all clips'} now</span></button></div>
+      <div class="row wrap" style="margin-top:6px"><button class="app-btn app-btn--sm" id="setupAgain">${icon('key', 14)}<span>Setup assistant…</span></button><button class="app-btn app-btn--sm" id="prepProxies">${icon('layers', 14)}<span>Prepare playable copies for ${needProxy ? plural(needProxy, 'clip') : 'all clips'} now</span></button></div>
     </div>
 
     <div class="section-label">Data</div>
@@ -132,6 +140,7 @@ export default {
       else if (t.id === 'sIgnore') save({ ignoreDirs: t.value.split(',') });
       else if (t.id === 'sVisModel') put('/api/vision', { model: t.value }).then((r) => { vis = r; toast('Saved.', { timeout: 1200 }); }).catch(toastError);
       else if (t.id === 'sVisConsent') put('/api/vision', { consent: t.checked }).then((r) => { vis = r; toast('Saved.', { timeout: 1200 }); }).catch(toastError);
+      else if (t.id === 'sBudget' || t.id === 'sConfirm') put('/api/vision', { budget: { [t.id === 'sBudget' ? 'monthly' : 'confirmAbove']: t.value.trim() === '' ? null : t.value } }).then((r) => { vis = r; toast('Saved.', { timeout: 1200 }); draw(); }).catch(toastError);
     });
     on(el, 'click', '[data-theme-pick]', (e, b) => { setTheme(b.dataset.themePick); draw(); });
     on(el, 'click', '#addFolder', async () => { try { const r = await post('/api/pick-folder', { title: 'Add a footage folder', start: proj().root }); if (r.path) { await save({ folders: [...proj().folders, r.path] }); } } catch (e) { toastError(e); } });
@@ -150,6 +159,7 @@ export default {
     on(el, 'click', '#visRemove', async () => { try { vis = await put('/api/vision', { key: '' }); visMsg = null; await loadInfo(); draw(); toast('Key removed from this computer.', { type: 'success' }); } catch (e) { toastError(e); } });
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'sVisKey') el.querySelector('#visSave').click(); });
     on(el, 'click', '#renameAll', () => openRenameAll());
+    on(el, 'click', '#setupAgain', () => openSetup({ onDone: () => get('/api/vision').then((r) => { vis = r; draw(); }).catch(() => {}) }));
     on(el, 'click', '#revealProj', () => post('/api/reveal', {}).catch(toastError));
   },
   update() { if (root && !(document.activeElement && /INPUT|SELECT/.test(document.activeElement.tagName))) draw(); },
