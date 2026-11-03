@@ -64,7 +64,7 @@ function createServer({ token, port, app: injected }) {
     let rel = decodeURIComponent(url.pathname);
     if (rel === '/') rel = '/index.html';
     const file = path.normalize(path.join(UI_DIR, rel));
-    if (!file.startsWith(UI_DIR)) throw httpError(403, 'Forbidden');
+    if (file !== UI_DIR && !file.startsWith(UI_DIR + path.sep)) throw httpError(403, 'Forbidden'); // inside ui/, not a sibling like ui-old/
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw httpError(404, 'Not found');
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     fs.createReadStream(file).pipe(res);
@@ -394,6 +394,8 @@ function browse(dir) {
 }
 
 function reveal(target) {
+  // only real files and folders: the file manager would also open URLs and protocol links
+  if (!path.isAbsolute(target) || !fs.existsSync(target)) throw httpError(404, 'That file or folder does not exist.');
   if (process.platform === 'win32') {
     if (fs.existsSync(target) && fs.statSync(target).isFile()) spawn('explorer.exe', [`/select,${target}`], { windowsHide: false, detached: true }).unref();
     else spawn('explorer.exe', [target], { detached: true }).unref();

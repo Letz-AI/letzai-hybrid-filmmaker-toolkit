@@ -157,6 +157,14 @@ test('project lifecycle, media range requests, reports, rename and undo', { skip
   assert.equal((await req('POST', '/api/clip/rename', { body: { key: raw.key, scene: '', shot: '1', take: 1 } })).status, 400);
   assert.equal((await req('POST', '/api/canvas/send', { body: { keys: [named2.key] } })).status, 401, 'no key: asks for one instead of failing mysteriously');
 
+  // "show in folder" opens only real files and folders, never a URL or protocol link (the file manager would open those)
+  for (const p of ['https://example.com', 'ms-settings:', 'calc', path.join(film, 'no-such-thing')]) {
+    assert.equal((await req('POST', '/api/reveal', { body: { path: p } })).status, 404, p);
+  }
+  // static files stay inside ui/, also against a sibling folder whose name starts with "ui"
+  assert.equal((await req('GET', '/..%2Fui-elsewhere%2Fsecret.txt')).status, 403);
+  assert.equal((await req('GET', '/%2e%2e/package.json')).status === 200, false);
+
   // the project file is plain JSON in the film folder
   const file = JSON.parse(fs.readFileSync(path.join(film, 'letzai-kit.json'), 'utf8'));
   assert.equal(file.name, 'T');
