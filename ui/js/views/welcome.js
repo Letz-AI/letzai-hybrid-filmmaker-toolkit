@@ -1,5 +1,5 @@
 // No project open: pick a film folder, reopen a recent one, check the setup.
-import { html, icon, mount, on, $, esc } from '../lib.js';
+import { html, icon, mount, on, $, esc, feedbackHref, FEEDBACK_EMAIL } from '../lib.js';
 import { get, post } from '../api.js';
 import { S } from '../store.js';
 import { toast, toastError, openPopup, field } from '../ui.js';
@@ -22,6 +22,7 @@ function hero() {
           <input class="app-input" id="pathInput" placeholder="C:\\Films\\My film" style="width:300px" spellcheck="false">
           <button class="app-btn" id="openPath">Open</button>
         </div>
+        <div class="beta-note"><span class="beta-badge">Beta</span><span class="muted">A work in progress. Feedback? Send it to <a href="${feedbackHref(S.info.app.version)}">${FEEDBACK_EMAIL}</a>.</span><a class="app-btn app-btn--sm" href="${feedbackHref(S.info.app.version)}">${icon('chat', 14)}<span>Send feedback</span></a></div>
       </div>
 
       ${recent.length ? html`

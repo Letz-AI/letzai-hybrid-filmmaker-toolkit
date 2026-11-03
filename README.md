@@ -10,7 +10,10 @@
 
 The kit runs on your own computer, with your own footage. It is free and open source. You don't need an account to review and name clips.
 
-> **Beta.** The kit is a work in progress. Feedback, bugs and ideas are welcome: [support@letz.ai](mailto:support@letz.ai), or [open an issue](https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit/issues).
+> [!WARNING]
+> **Beta: a work in progress.** The kit is new and still changing, so expect rough edges and bugs. It renames and cuts files in your film folder: renames can be undone and the picture and sound of your takes are never changed, only their names, but **keep a backup of your footage**, as you would with any new tool on a shoot. AI slate reading costs money on your AI account; check the estimate before each run and set a budget. The kit comes without warranty (see [License](#license)).
+>
+> Feedback, bugs and ideas are very welcome: [support@letz.ai](mailto:support@letz.ai), or [open an issue](https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit/issues).
 
 It is made for hybrid films: shoot real footage, sort it quickly, then bring the best takes into LetzAI and generate around them.
 

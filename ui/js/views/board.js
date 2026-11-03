@@ -1,5 +1,5 @@
 // The Dashboard (route #/board): the plan laid over what was shot. Which shots are covered, which are missing, which need a decision.
-import { html, icon, mount, on, $, $$, fmtDur, fmtClock, fmtDay, plural, clamp, debounce, feedbackHref, FEEDBACK_EMAIL } from '../lib.js';
+import { html, icon, mount, on, $, $$, fmtDur, fmtClock, fmtDay, plural, clamp, debounce } from '../lib.js';
 import { get, post, patch } from '../api.js';
 import { S, scenes, totals, clips, allClips, takesOf, clip, folders, folderLabel, hasManyFolders, setFolderFilter, loadInfo, failedSends, subscribeJobs } from '../store.js';
 import { toast, toastError, openMenu } from '../ui.js';
@@ -231,7 +231,6 @@ function render() {
         <div><h1 class="page-title">${p.name}</h1>
           <div class="page-sub tnum">${S.filters.folder ? html`${folderChip()} · ` : ''}${plural(t.scenes, 'scene')} · ${plural(t.shots, 'shot')} · ${plural(t.takes, 'take')} · ${fmtDur(t.runtime)} of footage${clips().some((c) => c.kind === 'raw' && !c.skip) ? html` · <a href="#/ingest">${clips().filter((c) => c.kind === 'raw' && !c.skip).length} unnamed</a>` : ''}</div></div>
         <div class="page-actions">
-          <a class="app-btn app-btn--sm feedback-btn" href="${feedbackHref(S.info.app.version)}" title="Feedback? Send it to ${FEEDBACK_EMAIL}">${icon('chat', 14)}<span>Feedback</span></a>
           <button class="app-icon-btn" id="pageMenu" title="Shot list, scenes, exports">${icon('more', 18)}</button>
           <button class="app-btn app-btn--primary" id="startReview" ${noClips ? 'disabled' : ''}>${icon('review')}<span>${toReviewKey ? `Review ${plural(t.toReview, 'shot')}` : 'Open review'}</span></button>
         </div>
