@@ -96,6 +96,7 @@ const P = {
   dashed: '<rect x="4.5" y="5.5" width="15" height="13" rx="2" stroke-dasharray="3 3"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   cloud: '<path d="M7 18.5a4 4 0 0 1-.6-7.95 5.5 5.5 0 0 1 10.6 1.2A3.4 3.4 0 0 1 16.5 18.5z"/>',
+  chat: '<path d="M5 5.5h14A1.5 1.5 0 0 1 20.5 7v8.5A1.5 1.5 0 0 1 19 17h-8.5L6 20.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5z"/>', // the kit's own
 };
 
 export function icon(name, size) {
@@ -151,3 +152,7 @@ export const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t);
 export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }
+
+/** Where feedback goes while the kit is in beta: an email with the version filled in. */
+export const FEEDBACK_EMAIL = 'support@letz.ai';
+export const feedbackHref = (version) => `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(`Hybrid Filmmaker Kit feedback (v${version || '?'}, beta)`)}`;

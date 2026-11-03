@@ -1,7 +1,7 @@
 // Settings, in two groups: "This film" (name and naming, footage folders, playback; needs an open film) and "Kit"
 // (works without a film). Each feature owns its key: the LetzAI key is on the LetzAI page, the AI key on the AI slate
 // reading page. Each item is its own page: #/settings/<section>.
-import { html, icon, mount, on, plural, debounce } from '../lib.js';
+import { html, icon, mount, on, plural, debounce, feedbackHref, FEEDBACK_EMAIL } from '../lib.js';
 import { get, post, put, patch } from '../api.js';
 import { providerPicker, currentProvider, money } from '../slate.js';
 import { openSetup } from '../setup.js';
@@ -141,7 +141,8 @@ function appearancePage() {
 
 function aboutPage() {
   return html`
-    ${card('', html`<div><b>${S.info.app.name}</b> <span class="faint">version ${S.info.app.version} · MIT license</span></div>
+    ${card('', html`<div><b>${S.info.app.name}</b> <span class="beta-badge">Beta</span> <span class="faint">version ${S.info.app.version} · MIT license</span></div>
+      <div class="muted">A work in progress. Feedback? Send it to <a href="${feedbackHref(S.info.app.version)}">${FEEDBACK_EMAIL}</a>.</div>
       <div class="row wrap"><a class="app-btn app-btn--sm" href="https://letz.ai/docs/api" target="_blank" rel="noopener">${icon('external', 14)}<span>LetzAI API docs</span></a><a class="app-btn app-btn--sm" href="https://www.letz.ai/brandguidelines" target="_blank" rel="noopener">${icon('external', 14)}<span>Brand guidelines</span></a><a class="app-btn app-btn--sm" href="https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit" target="_blank" rel="noopener">${icon('external', 14)}<span>Source code</span></a></div>`)}
     ${card('This computer', html`
       ${check(S.info.ffmpeg.ok, 'ffmpeg', S.info.ffmpeg.ok ? html`${S.info.ffmpeg.version}<br><span class="faint tnum">${S.info.ffmpeg.path}</span>` : 'Not found. Install it and restart the kit.')}

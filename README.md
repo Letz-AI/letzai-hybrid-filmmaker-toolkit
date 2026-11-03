@@ -4,10 +4,13 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-black.svg)](LICENSE)
 ![Node 20+](https://img.shields.io/badge/node-20%2B-black.svg)
 ![Windows, macOS, Linux](https://img.shields.io/badge/runs%20on-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-black.svg)
+![Beta](https://img.shields.io/badge/status-beta-black.svg)
 
 **Review your footage, see which shots are still missing, name and pick your best takes, and send them to a [LetzAI Canvas](https://www.letz.ai/canvas).**
 
 The kit runs on your own computer, with your own footage. It is free and open source. You don't need an account to review and name clips.
+
+> **Beta.** The kit is a work in progress. Feedback, bugs and ideas are welcome: [support@letz.ai](mailto:support@letz.ai), or [open an issue](https://github.com/Letz-AI/letzai-hybrid-filmmaker-toolkit/issues).
 
 It is made for hybrid films: shoot real footage, sort it quickly, then bring the best takes into LetzAI and generate around them.
 

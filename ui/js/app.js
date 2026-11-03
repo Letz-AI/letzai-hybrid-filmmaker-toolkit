@@ -87,7 +87,7 @@ function renderTop() {
   const jobs = runningJobs();
   const failed = S.jobs.filter((j) => j.state === 'error' && Date.now() - (j.finishedAt || 0) < 3600e3).length;
   mount($top, html`
-    <div class="brand"><img class="brand-l brand-l--light" src="/img/letzai-l.png" alt="LetzAI"><img class="brand-l brand-l--dark" src="/img/letzai-l-inverted.png" alt="LetzAI"><span>LetzAI</span><span class="brand-sub">Hybrid Filmmaker Kit</span></div>
+    <div class="brand"><img class="brand-l brand-l--light" src="/img/letzai-l.png" alt="LetzAI"><img class="brand-l brand-l--dark" src="/img/letzai-l-inverted.png" alt="LetzAI"><span>LetzAI</span><span class="brand-sub">Hybrid Filmmaker Kit</span><span class="beta-badge" title="A work in progress. Feedback: support@letz.ai">Beta</span></div>
     ${p ? html`<button class="app-btn" id="projectMenu" title="Project">${icon('folder')}<span>${p.name}</span>${icon('chevronDown', 12)}</button>` : ''}
     <div class="top-spacer"></div>
     ${p ? html`<button class="app-btn app-btn--outline" id="paletteBtn" title="Jump to any shot or action">${icon('search')}<span class="muted">Jump to…</span><span class="kbd">Ctrl K</span></button>` : ''}
